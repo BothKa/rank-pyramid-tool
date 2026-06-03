@@ -21,6 +21,7 @@
 
 body {
   margin: 0;
+  width: 100%;
   min-width: 320px;
   min-height: 100vh;
   background:
@@ -57,6 +58,7 @@ button {
 .output-panel,
 .pyramid-frame,
 .detail-panel {
+  min-width: 0;
   border: 1px solid var(--line);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(251, 249, 242, 0.92)),
@@ -151,10 +153,12 @@ h2 {
 .compact-field {
   margin-bottom: 0;
   flex: 1;
+  min-width: 0;
 }
 
 input {
   width: 100%;
+  min-width: 0;
   min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -239,12 +243,14 @@ input:focus {
 
 .member-head {
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 10px;
 }
 
 .member-actions {
   display: flex;
+  flex-shrink: 0;
   gap: 6px;
 }
 
@@ -620,13 +626,14 @@ td small {
   }
 
   body {
-    padding-bottom: calc(148px + env(safe-area-inset-bottom));
+    padding-bottom: calc(104px + env(safe-area-inset-bottom));
   }
 
   .app-shell {
-    width: calc(100vw - 18px);
-    max-width: calc(100vw - 18px);
-    padding: 9px 0;
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 8px max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left));
   }
 
   .input-panel,
@@ -645,6 +652,17 @@ td small {
   .panel-head {
     align-items: flex-start;
     flex-direction: column;
+    gap: 12px;
+  }
+
+  .member-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+
+  .member-actions {
+    padding-bottom: 10px;
   }
 
   .panel-head.compact {
@@ -665,15 +683,15 @@ td small {
 
   .mobile-status {
     position: fixed;
-    right: auto;
+    right: max(8px, env(safe-area-inset-right));
     bottom: calc(8px + env(safe-area-inset-bottom));
-    left: 9px;
-    width: min(357px, calc(100vw - 18px));
-    max-width: min(357px, calc(100vw - 18px));
+    left: max(8px, env(safe-area-inset-left));
+    width: auto;
+    max-width: none;
     z-index: 20;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
     align-items: center;
     border: 1px solid rgba(120, 105, 80, 0.28);
     border-radius: 8px;
@@ -681,7 +699,7 @@ td small {
       linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(246, 241, 230, 0.91)),
       #ffffff;
     box-shadow: 0 14px 36px rgba(35, 31, 25, 0.2);
-    padding: 9px;
+    padding: 6px;
     backdrop-filter: blur(14px);
   }
 
@@ -690,7 +708,8 @@ td small {
     border: 1px solid rgba(120, 105, 80, 0.18);
     border-radius: 7px;
     background: rgba(255, 255, 255, 0.58);
-    padding: 7px;
+    min-height: 50px;
+    padding: 6px 4px;
   }
 
   .mobile-stat span,
@@ -698,7 +717,7 @@ td small {
     display: block;
     overflow: hidden;
     color: var(--muted);
-    font-size: 0.68rem;
+    font-size: 0.6rem;
     font-weight: 800;
     line-height: 1.2;
     text-overflow: ellipsis;
@@ -709,7 +728,7 @@ td small {
     display: block;
     overflow: hidden;
     color: var(--ink);
-    font-size: 0.86rem;
+    font-size: 0.76rem;
     line-height: 1.3;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -726,7 +745,7 @@ td small {
     display: grid;
     place-items: center;
     padding: 0 6px;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     font-weight: 900;
   }
 
@@ -737,10 +756,10 @@ td small {
 
 @media (max-width: 380px) {
   body {
-    padding-bottom: calc(142px + env(safe-area-inset-bottom));
+    padding-bottom: calc(98px + env(safe-area-inset-bottom));
   }
 
   .mobile-status-action {
-    min-height: 34px;
+    min-height: 48px;
   }
 }
