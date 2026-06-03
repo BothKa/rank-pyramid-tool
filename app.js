@@ -230,6 +230,7 @@
 
   let state = loadState();
   let renderQueued = false;
+  let needsInputRender = false;
 
   const els = {
     form: document.getElementById("rankForm"),
@@ -281,19 +282,29 @@
     }));
   }
 
-  function scheduleRender() {
+  function scheduleRender(options = {}) {
+    needsInputRender = needsInputRender || Boolean(options.inputs);
     if (renderQueued) return;
     renderQueued = true;
     window.setTimeout(() => {
       renderQueued = false;
       saveState();
-      render();
+      if (needsInputRender) {
+        needsInputRender = false;
+        render();
+        return;
+      }
+      renderResults();
     }, 0);
   }
 
   function render() {
-    const result = analyze(state);
     renderInputs();
+    renderResults();
+  }
+
+  function renderResults() {
+    const result = analyze(state);
     renderSummary(result);
     renderMobileStatus(result);
     renderPyramid(result);
@@ -670,13 +681,13 @@
     const action = button.dataset.action;
     if (action === "add-leader-amount") {
       state.leader.amounts.push({ id: uniqueId(), v: "" });
-      scheduleRender();
+      scheduleRender({ inputs: true });
       return;
     }
 
     if (action === "add-member") {
       addMember();
-      scheduleRender();
+      scheduleRender({ inputs: true });
       return;
     }
 
@@ -687,26 +698,26 @@
 
     if (button.classList.contains("remove-amount")) {
       removeAmount(button.dataset.scope, button.dataset.amountId, button.dataset.memberId);
-      scheduleRender();
+      scheduleRender({ inputs: true });
       return;
     }
 
     if (button.classList.contains("add-member-amount")) {
       const member = findMember(button.dataset.memberId);
       if (member) member.amounts.push({ id: uniqueId(), v: "" });
-      scheduleRender();
+      scheduleRender({ inputs: true });
       return;
     }
 
     if (button.classList.contains("remove-member")) {
       state.members = state.members.filter((member) => String(member.id) !== String(button.dataset.memberId));
-      scheduleRender();
+      scheduleRender({ inputs: true });
     }
   });
 
   els.resetExample.addEventListener("click", () => {
     state = cloneState(DEFAULT_STATE);
-    scheduleRender();
+    scheduleRender({ inputs: true });
   });
 
   function addMember() {
