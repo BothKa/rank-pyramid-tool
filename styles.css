@@ -256,7 +256,7 @@ input:focus {
 
 .result-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(140px, 1fr));
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -336,6 +336,11 @@ input:focus {
 
 .legend-swatch.muted {
   background: #e8e4dc;
+}
+
+.legend-swatch.personal {
+  background: #fffefa;
+  border: 2px dashed var(--copper);
 }
 
 .pyramid-canvas {
@@ -484,6 +489,25 @@ input:focus {
   font-size: 11px;
 }
 
+.leader-personal-marker {
+  filter: url(#markerGlow);
+}
+
+.leader-personal-marker circle {
+  fill: #fffefa;
+  stroke: var(--copper);
+  stroke-width: 2.2;
+  stroke-dasharray: 5 3;
+}
+
+.leader-personal-marker text {
+  fill: var(--copper);
+  font-size: 11px;
+  font-weight: 900;
+  dominant-baseline: middle;
+  text-anchor: middle;
+}
+
 .status-ring {
   pointer-events: none;
 }
@@ -615,7 +639,7 @@ td small {
   }
 
   .result-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -678,7 +702,7 @@ td small {
   }
 
   .result-strip {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .mobile-status {
@@ -686,7 +710,7 @@ td small {
     width: auto;
     max-width: none;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
     align-items: center;
     margin: 14px 0 18px;

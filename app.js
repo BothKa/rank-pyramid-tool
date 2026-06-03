@@ -184,6 +184,8 @@
     const highIdx = teamHighGateIdx(positions);
     const shi = shiGate(xian, highIdx);
 
+    const leaderPersonalGate = gateFor(maxWanOf(state.leader.amounts));
+
     return {
       ...cascade,
       positions,
@@ -192,7 +194,8 @@
       xian,
       xianInProgress: cascade.curr?.status === "wip",
       teamHighIdx: highIdx,
-      shi
+      shi,
+      leaderPersonalGate
     };
   }
 
@@ -396,13 +399,15 @@
     const highText = result.teamHighIdx >= 0 ? GATES[result.teamHighIdx].name : "—";
     const teamText = result.teamTier ? `${result.teamTier.label} ${result.teamTier.desc}` : "—";
     const progress = result.xianInProgress ? "前進中" : "已達真命";
+    const personalText = result.leaderPersonalGate ? result.leaderPersonalGate.name : "—";
 
     els.summary.innerHTML = [
       metric("隊長總額", fmt(result.leaderWan), `${state.leader.amounts.length} 筆加總`),
+      metric("隊長個人", personalText, result.leaderPersonalGate ? "個人最高金額定位" : "尚無有效金額"),
       metric("先得後修", xianText, result.xian ? progress : "尚未定位"),
       metric("實得實修", shiText, result.teamHighIdx >= 0 ? `隊員最高 +2 上限` : "無隊員限制"),
       metric("有效隊員", `${result.effectiveCount} 人`, teamText),
-      metric("隊員最高", highText, result.teamHighIdx >= 0 ? `idx ${result.teamHighIdx}` : "尚無有效隊員")
+      metric("隊員最高", highText, result.teamHighIdx >= 0 ? `實得計算基準` : "尚無有效隊員")
     ].join("");
   }
 
@@ -411,9 +416,11 @@
 
     const xianText = result.xian ? result.xian.name : "—";
     const shiText = result.shi ? result.shi.name : "—";
+    const personalText = result.leaderPersonalGate ? result.leaderPersonalGate.name : "—";
     const progress = result.xianInProgress ? "前進中" : result.xian ? "已達真命" : "尚未定位";
 
     els.mobileStatus.innerHTML = `
+      ${mobileStat("個人", personalText, "個人定位")}
       ${mobileStat("先得", xianText, progress)}
       ${mobileStat("實得", shiText, result.teamHighIdx >= 0 ? "隊員 +2" : "無限制")}
       ${mobileStat("隊員", `${result.effectiveCount} 人`, result.teamTier ? result.teamTier.label : "—")}
@@ -576,6 +583,13 @@
         parts.push(`</g>`);
       });
     });
+
+    if (result.leaderPersonalGate) {
+      const base = positions[result.leaderPersonalGate.idx];
+      parts.push(`<g class="leader-personal-marker" aria-label="隊長個人定位" transform="translate(${base.x} ${base.y - 52})">`);
+      parts.push(`<circle r="14"></circle><text y="1">個</text>`);
+      parts.push(`</g>`);
+    }
 
     if (result.xian) {
       const base = positions[result.xian.idx];
