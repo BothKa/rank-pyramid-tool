@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>階級三角形定位系統</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace" aria-label="階級定位計算工具">
+        <aside class="input-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">十大關卡</p>
+              <h1>階級三角形</h1>
+            </div>
+            <button class="ghost-button" id="resetExample" type="button">範例</button>
+          </div>
+
+          <form id="rankForm" autocomplete="off">
+            <section class="form-section" aria-labelledby="leaderHeading">
+              <div class="section-title">
+                <h2 id="leaderHeading">隊長</h2>
+                <button class="icon-button" data-action="add-leader-amount" type="button" title="新增隊長金額" aria-label="新增隊長金額">+</button>
+              </div>
+              <label class="field-label">
+                <span>姓名</span>
+                <input id="leaderName" name="leaderName" type="text" />
+              </label>
+              <div class="amount-list" id="leaderAmounts"></div>
+            </section>
+
+            <section class="form-section" aria-labelledby="membersHeading">
+              <div class="section-title">
+                <h2 id="membersHeading">隊員</h2>
+                <button class="icon-button" data-action="add-member" type="button" title="新增隊員" aria-label="新增隊員">+</button>
+              </div>
+              <div class="member-list" id="members"></div>
+            </section>
+          </form>
+        </aside>
+
+        <section class="output-panel">
+          <div class="result-strip" id="summary"></div>
+
+          <section class="pyramid-frame" aria-labelledby="pyramidHeading">
+            <div class="panel-head compact">
+              <div>
+                <p class="eyebrow">三色定位圖</p>
+                <h2 id="pyramidHeading">金字塔</h2>
+              </div>
+              <div class="legend" aria-label="圖例">
+                <span><i class="legend-swatch solid"></i>實得</span>
+                <span><i class="legend-swatch nominal"></i>先得</span>
+                <span><i class="legend-swatch muted"></i>未觸及</span>
+              </div>
+            </div>
+            <div id="pyramid" class="pyramid-canvas"></div>
+          </section>
+
+          <section class="detail-grid">
+            <article class="detail-panel">
+              <div class="section-title plain">
+                <h2>級聯計算</h2>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>關卡</th>
+                      <th>狀態</th>
+                      <th>隊員覆蓋</th>
+                      <th>隊長補額</th>
+                      <th>剩餘</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cascadeRows"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="detail-panel">
+              <div class="section-title plain">
+                <h2>團隊定位</h2>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>隊員</th>
+                      <th>最高金額</th>
+                      <th>位置</th>
+                    </tr>
+                  </thead>
+                  <tbody id="memberRows"></tbody>
+                </table>
+              </div>
+            </article>
+          </section>
+        </section>
+      </section>
+      <aside class="mobile-status" id="mobileStatus" aria-live="polite"></aside>
+    </main>
+
+    <template id="amountTemplate">
+      <div class="amount-row">
+        <input class="amount-input" inputmode="decimal" type="text" placeholder="金額（萬；大於 10000 視為元）" />
+        <button class="icon-button subtle remove-amount" type="button" title="移除金額" aria-label="移除金額">×</button>
+      </div>
+    </template>
+
+    <template id="memberTemplate">
+      <article class="member-item">
+        <div class="member-head">
+          <label class="field-label compact-field">
+            <span>姓名</span>
+            <input class="member-name" type="text" />
+          </label>
+          <div class="member-actions">
+            <button class="icon-button subtle add-member-amount" type="button" title="新增隊員金額" aria-label="新增隊員金額">+</button>
+            <button class="icon-button subtle remove-member" type="button" title="移除隊員" aria-label="移除隊員">×</button>
+          </div>
+        </div>
+        <div class="amount-list member-amounts"></div>
+      </article>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
