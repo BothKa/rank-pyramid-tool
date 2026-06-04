@@ -34,10 +34,17 @@ assert.equal(teamTierFor(0), null);
 assert.equal(CYCLES.length, 5);
 assert.deepEqual(CYCLES.map((cycle) => cycle.name), ["小輪迴", "中輪迴", "大輪迴", "極輪迴", "極極輪迴"]);
 assert.deepEqual(CYCLES.map((cycle) => cycle.passWan), [55, 550, 5500, 55000, 550000]);
+assert.deepEqual(CYCLES.map((cycle) => cycle.segmentWan), [55, 638, 6380, 63800, 638000]);
+assert.deepEqual(CYCLES.map((cycle) => cycle.cumulativePassWan), [55, 693, 7073, 70873, 708873]);
 assert.equal(cycleStatusFor(54.9).current.name, "小輪迴");
 assert.equal(cycleStatusFor(55).cleared.name, "小輪迴");
 assert.equal(cycleStatusFor(55).current.name, "中輪迴");
-assert.equal(cycleStatusFor(550000).allCleared, true);
+assert.equal(cycleStatusFor(660).cleared.name, "小輪迴");
+assert.equal(cycleStatusFor(660).current.name, "中輪迴");
+assert.equal(cycleStatusFor(660).remaining, 33);
+assert.equal(cycleStatusFor(693).cleared.name, "中輪迴");
+assert.equal(cycleStatusFor(693).current.name, "大輪迴");
+assert.equal(cycleStatusFor(708873).allCleared, true);
 
 const case660 = analyze(state(660, [2.2, 2.2, 2.2]));
 assert.equal(case660.leaderWan, 660);
@@ -47,6 +54,9 @@ assert.equal(Number(case660.curr.rem.toFixed(1)), 237.6);
 assert.equal(case660.xian.name, "社會關");
 assert.equal(case660.xianInProgress, true);
 assert.equal(case660.shi.name, "事業關");
+assert.equal(case660.leaderCycle.cleared.name, "小輪迴");
+assert.equal(case660.leaderCycle.current.name, "中輪迴");
+assert.equal(case660.leaderCycle.remaining, 33);
 
 const case880 = analyze(state(880, [2.2, 2.2, 2.2]));
 assert.equal(case880.curr.status, "at_zm");

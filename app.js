@@ -27,19 +27,29 @@
   ];
 
   const CYCLE_NAMES = ["小輪迴", "中輪迴", "大輪迴", "極輪迴", "極極輪迴"];
+  let cumulativeCycleWan = 0;
   const CYCLES = CYCLE_NAMES.map((name, index) => {
     const lowerGate = GATES[index * 2];
     const upperGate = GATES[index * 2 + 1];
+    const carryGate = index > 0 ? GATES[index * 2 - 1] : null;
+    const carryCount = carryGate ? 10 : 0;
     const lowerCount = 13;
     const upperCount = 3;
+    const passWan = lowerGate.base * lowerCount + upperGate.base * upperCount;
+    const segmentWan = passWan + (carryGate ? carryGate.base * carryCount : 0);
+    cumulativeCycleWan += segmentWan;
     return {
       idx: index,
       name,
+      carryGate,
+      carryCount,
       lowerGate,
       upperGate,
       lowerCount,
       upperCount,
-      passWan: lowerGate.base * lowerCount + upperGate.base * upperCount,
+      passWan,
+      segmentWan,
+      cumulativePassWan: cumulativeCycleWan,
       col: upperGate.col
     };
   });
@@ -91,22 +101,29 @@
 
   function cycleProgressAt(wan, cycle) {
     const amount = Math.max(0, Number(wan) || 0);
-    const progress = cycle.passWan > 0 ? Math.min(1, amount / cycle.passWan) : 0;
+    const previousWan = CYCLES[cycle.idx - 1]?.cumulativePassWan || 0;
+    const inCycleWan = Math.max(0, amount - previousWan);
+    const appliedWan = Math.min(cycle.segmentWan, inCycleWan);
+    const progress = cycle.segmentWan > 0 ? Math.min(1, appliedWan / cycle.segmentWan) : 0;
     return {
       amount,
       cycle,
-      passed: amount >= cycle.passWan,
+      previousWan,
+      inCycleWan,
+      appliedWan,
+      passed: amount >= cycle.cumulativePassWan,
       progress,
-      remaining: Math.max(0, cycle.passWan - amount)
+      remaining: Math.max(0, cycle.cumulativePassWan - amount),
+      overflowWan: Math.max(0, amount - cycle.cumulativePassWan)
     };
   }
 
   function cycleStatusFor(wan) {
     const amount = Math.max(0, Number(wan) || 0);
     const lastCycle = CYCLES[CYCLES.length - 1];
-    const cleared = CYCLES.filter((cycle) => amount >= cycle.passWan).at(-1) || null;
-    const allCleared = amount >= lastCycle.passWan;
-    const current = allCleared ? lastCycle : CYCLES.find((cycle) => amount < cycle.passWan);
+    const cleared = CYCLES.filter((cycle) => amount >= cycle.cumulativePassWan).at(-1) || null;
+    const allCleared = amount >= lastCycle.cumulativePassWan;
+    const current = allCleared ? lastCycle : CYCLES.find((cycle) => amount < cycle.cumulativePassWan);
     const currentProgress = cycleProgressAt(amount, current);
 
     return {
@@ -115,7 +132,10 @@
       current,
       allCleared,
       progress: currentProgress.progress,
-      remaining: currentProgress.remaining
+      remaining: currentProgress.remaining,
+      inCycleWan: currentProgress.inCycleWan,
+      appliedWan: currentProgress.appliedWan,
+      overflowWan: currentProgress.overflowWan
     };
   }
 
@@ -505,8 +525,8 @@
 
   function cycleSubText(status) {
     if (!status?.current) return "尚未定位";
-    if (status.allCleared) return "已全數通關";
-    if (status.cleared) return `${status.cleared.name}已通關`;
+    if (status.allCleared) return status.overflowWan > 0 ? `已全數通關・餘 ${fmt(status.overflowWan)}` : "已全數通關";
+    if (status.cleared) return `${status.cleared.name}已通關・差 ${fmt(status.remaining)}`;
     return `差 ${fmt(status.remaining)}`;
   }
 
@@ -731,20 +751,36 @@
 
     els.cycleRows.innerHTML = result.cycleRows.map(({ cycle, leader, team }) => `
       <tr>
-        <td><strong>${escapeHtml(cycle.name)}</strong><small>${escapeHtml(fmt(cycle.passWan))} 通關</small></td>
-        <td>${escapeHtml(cycle.lowerGate.name)} / ${escapeHtml(cycle.upperGate.name)}</td>
-        <td><strong>${cycle.lowerCount} 個 ${escapeHtml(fmt(cycle.lowerGate.base))}</strong><small>+ ${cycle.upperCount} 個 ${escapeHtml(fmt(cycle.upperGate.base))}</small></td>
+        <td><strong>${escapeHtml(cycle.name)}</strong><small>${escapeHtml(fmt(cycle.cumulativePassWan))} 累計通關</small></td>
+        <td>${cycleGateCell(cycle)}</td>
+        <td>${cycleRequirementCell(cycle)}</td>
         <td>${cycleProgressCell(leader)}</td>
         <td>${cycleProgressCell(team)}</td>
       </tr>
     `).join("");
   }
 
+  function cycleGateCell(cycle) {
+    const carry = cycle.carryGate ? `<small>${escapeHtml(cycle.carryGate.name)}需累計 ${cycle.lowerCount} 個</small>` : "";
+    return `${escapeHtml(cycle.lowerGate.name)} / ${escapeHtml(cycle.upperGate.name)}${carry}`;
+  }
+
+  function cycleRequirementCell(cycle) {
+    const carry = cycle.carryGate
+      ? `<strong>補 ${cycle.carryCount} 個 ${escapeHtml(fmt(cycle.carryGate.base))}</strong>`
+      : "";
+    const main = `${cycle.lowerCount} 個 ${escapeHtml(fmt(cycle.lowerGate.base))}`;
+    const upper = `${cycle.upperCount} 個 ${escapeHtml(fmt(cycle.upperGate.base))}`;
+    const prefix = carry ? `${carry}<small>+ ${main} + ${upper}</small>` : `<strong>${main}</strong><small>+ ${upper}</small>`;
+    return `${prefix}<small>本輪需 ${escapeHtml(fmt(cycle.segmentWan))}</small>`;
+  }
+
   function cycleProgressCell(progress) {
     const status = progress.passed ? "cleared" : "wip";
     const label = progress.passed ? "通關" : "進行中";
+    const applied = Math.min(progress.appliedWan, progress.cycle.segmentWan);
     const sub = progress.passed
-      ? `${fmt(progress.amount)} / ${fmt(progress.cycle.passWan)}`
+      ? `${fmt(applied)} / ${fmt(progress.cycle.segmentWan)}`
       : `${Math.round(progress.progress * 100)}%・差 ${fmt(progress.remaining)}`;
 
     return `<span class="status-pill status-${status}">${escapeHtml(label)}</span><small>${escapeHtml(sub)}</small>`;
