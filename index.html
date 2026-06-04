@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>階級三角形定位系統</title>
-    <link rel="stylesheet" href="./styles.css?v=20260603-personal-gate" />
+    <link rel="stylesheet" href="./styles.css?v=20260605-cycles" />
   </head>
   <body>
     <main class="app-shell">
@@ -63,6 +63,26 @@
           </section>
 
           <section class="detail-grid">
+            <article class="detail-panel cycle-panel">
+              <div class="section-title plain">
+                <h2>五大輪迴</h2>
+              </div>
+              <div class="table-wrap">
+                <table class="cycle-table">
+                  <thead>
+                    <tr>
+                      <th>輪迴</th>
+                      <th>關卡</th>
+                      <th>通關條件</th>
+                      <th>隊長自己</th>
+                      <th>團隊</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cycleRows"></tbody>
+                </table>
+              </div>
+            </article>
+
             <article class="detail-panel">
               <div class="section-title plain">
                 <h2>級聯計算</h2>
@@ -94,6 +114,7 @@
                       <th>隊員</th>
                       <th>最高金額</th>
                       <th>位置</th>
+                      <th>個別輪迴</th>
                     </tr>
                   </thead>
                   <tbody id="memberRows"></tbody>
@@ -125,9 +146,10 @@
           </div>
         </div>
         <div class="amount-list member-amounts"></div>
+        <div class="member-live-status" aria-live="polite"></div>
       </article>
     </template>
 
-    <script src="./app.js?v=20260603-personal-gate"></script>
+    <script src="./app.js?v=20260605-cycles"></script>
   </body>
 </html>

@@ -26,6 +26,24 @@
     { label: "13:1", desc: "滿編★", min: 13, max: 99, col: "#a29bfe" }
   ];
 
+  const CYCLE_NAMES = ["小輪迴", "中輪迴", "大輪迴", "極輪迴", "極極輪迴"];
+  const CYCLES = CYCLE_NAMES.map((name, index) => {
+    const lowerGate = GATES[index * 2];
+    const upperGate = GATES[index * 2 + 1];
+    const lowerCount = 13;
+    const upperCount = 3;
+    return {
+      idx: index,
+      name,
+      lowerGate,
+      upperGate,
+      lowerCount,
+      upperCount,
+      passWan: lowerGate.base * lowerCount + upperGate.base * upperCount,
+      col: upperGate.col
+    };
+  });
+
   const STATUS_TEXT = {
     covered: "隊員覆蓋",
     cleared: "清關",
@@ -71,6 +89,36 @@
     return amounts.reduce((max, amount) => Math.max(max, toWan(amount.v)), 0);
   }
 
+  function cycleProgressAt(wan, cycle) {
+    const amount = Math.max(0, Number(wan) || 0);
+    const progress = cycle.passWan > 0 ? Math.min(1, amount / cycle.passWan) : 0;
+    return {
+      amount,
+      cycle,
+      passed: amount >= cycle.passWan,
+      progress,
+      remaining: Math.max(0, cycle.passWan - amount)
+    };
+  }
+
+  function cycleStatusFor(wan) {
+    const amount = Math.max(0, Number(wan) || 0);
+    const lastCycle = CYCLES[CYCLES.length - 1];
+    const cleared = CYCLES.filter((cycle) => amount >= cycle.passWan).at(-1) || null;
+    const allCleared = amount >= lastCycle.passWan;
+    const current = allCleared ? lastCycle : CYCLES.find((cycle) => amount < cycle.passWan);
+    const currentProgress = cycleProgressAt(amount, current);
+
+    return {
+      amount,
+      cleared,
+      current,
+      allCleared,
+      progress: currentProgress.progress,
+      remaining: currentProgress.remaining
+    };
+  }
+
   function fmt(value) {
     const n = Number(value);
     if (Number.isNaN(n)) return "—";
@@ -86,9 +134,14 @@
         ...member,
         idx: index,
         wan,
-        gate: gateFor(wan)
+        gate: gateFor(wan),
+        cycle: cycleStatusFor(wan)
       };
     });
+  }
+
+  function teamWanOf(positions) {
+    return positions.reduce((sum, member) => sum + member.wan, 0);
   }
 
   function teamCoverage(members) {
@@ -180,9 +233,17 @@
     const positions = memberPositions(members);
     const effectiveCount = positions.filter((member) => member.wan > 0).length;
     const teamTier = teamTierFor(effectiveCount);
+    const teamWan = teamWanOf(positions);
     const xian = xianGate(cascade.last, cascade.curr);
     const highIdx = teamHighGateIdx(positions);
     const shi = shiGate(xian, highIdx);
+    const leaderCycle = cycleStatusFor(cascade.leaderWan);
+    const teamCycle = cycleStatusFor(teamWan);
+    const cycleRows = CYCLES.map((cycle) => ({
+      cycle,
+      leader: cycleProgressAt(cascade.leaderWan, cycle),
+      team: cycleProgressAt(teamWan, cycle)
+    }));
 
     const leaderPersonalGate = gateFor(maxWanOf(state.leader.amounts));
 
@@ -191,6 +252,10 @@
       positions,
       effectiveCount,
       teamTier,
+      teamWan,
+      leaderCycle,
+      teamCycle,
+      cycleRows,
       xian,
       xianInProgress: cascade.curr?.status === "wip",
       teamHighIdx: highIdx,
@@ -205,6 +270,7 @@
 
   const core = {
     GATES,
+    CYCLES,
     TEAM_TIERS,
     STATUS_TEXT,
     DEFAULT_STATE,
@@ -212,7 +278,10 @@
     gateFor,
     teamTierFor,
     maxWanOf,
+    cycleProgressAt,
+    cycleStatusFor,
     memberPositions,
+    teamWanOf,
     calcCascade,
     xianGate,
     teamHighGateIdx,
@@ -243,6 +312,7 @@
     summary: document.getElementById("summary"),
     mobileStatus: document.getElementById("mobileStatus"),
     pyramid: document.getElementById("pyramid"),
+    cycleRows: document.getElementById("cycleRows"),
     cascadeRows: document.getElementById("cascadeRows"),
     memberRows: document.getElementById("memberRows"),
     amountTemplate: document.getElementById("amountTemplate"),
@@ -310,7 +380,9 @@
     const result = analyze(state);
     renderSummary(result);
     renderMobileStatus(result);
+    renderMemberInlineStatus(result);
     renderPyramid(result);
+    renderCycles(result);
     renderCascade(result);
     renderMembers(result);
   }
@@ -396,7 +468,6 @@
   function renderSummary(result) {
     const xianText = result.xian ? result.xian.name : "—";
     const shiText = result.shi ? result.shi.name : "—";
-    const highText = result.teamHighIdx >= 0 ? GATES[result.teamHighIdx].name : "—";
     const teamText = result.teamTier ? `${result.teamTier.label} ${result.teamTier.desc}` : "—";
     const progress = result.xianInProgress ? "前進中" : "已達真命";
     const personalText = result.leaderPersonalGate ? result.leaderPersonalGate.name : "—";
@@ -404,28 +475,39 @@
     els.summary.innerHTML = [
       metric("隊長總額", fmt(result.leaderWan), `${state.leader.amounts.length} 筆加總`),
       metric("隊長個人", personalText, result.leaderPersonalGate ? "個人最高金額定位" : "尚無有效金額"),
+      metric("自己輪迴", cycleMainText(result.leaderCycle), cycleSubText(result.leaderCycle)),
+      metric("團隊輪迴", cycleMainText(result.teamCycle), `${fmt(result.teamWan)}・${cycleSubText(result.teamCycle)}`),
       metric("先得後修", xianText, result.xian ? progress : "尚未定位"),
       metric("實得實修", shiText, result.teamHighIdx >= 0 ? `隊員最高 +2 上限` : "無隊員限制"),
-      metric("有效隊員", `${result.effectiveCount} 人`, teamText),
-      metric("隊員最高", highText, result.teamHighIdx >= 0 ? `實得計算基準` : "尚無有效隊員")
+      metric("有效隊員", `${result.effectiveCount} 人`, teamText)
     ].join("");
   }
 
   function renderMobileStatus(result) {
     if (!els.mobileStatus) return;
 
-    const xianText = result.xian ? result.xian.name : "—";
     const shiText = result.shi ? result.shi.name : "—";
     const personalText = result.leaderPersonalGate ? result.leaderPersonalGate.name : "—";
-    const progress = result.xianInProgress ? "前進中" : result.xian ? "已達真命" : "尚未定位";
 
     els.mobileStatus.innerHTML = `
       ${mobileStat("個人", personalText, "個人定位")}
-      ${mobileStat("先得", xianText, progress)}
+      ${mobileStat("自己", cycleMainText(result.leaderCycle), cycleSubText(result.leaderCycle))}
+      ${mobileStat("團隊", cycleMainText(result.teamCycle), fmt(result.teamWan))}
       ${mobileStat("實得", shiText, result.teamHighIdx >= 0 ? "隊員 +2" : "無限制")}
-      ${mobileStat("隊員", `${result.effectiveCount} 人`, result.teamTier ? result.teamTier.label : "—")}
       <button class="mobile-status-action" data-action="jump-pyramid" type="button">看圖</button>
     `;
+  }
+
+  function cycleMainText(status) {
+    if (!status?.current) return "—";
+    return status.allCleared ? "五輪全通" : status.current.name;
+  }
+
+  function cycleSubText(status) {
+    if (!status?.current) return "尚未定位";
+    if (status.allCleared) return "已全數通關";
+    if (status.cleared) return `${status.cleared.name}已通關`;
+    return `差 ${fmt(status.remaining)}`;
   }
 
   function mobileStat(label, value, sub) {
@@ -644,9 +726,47 @@
     }).join("");
   }
 
+  function renderCycles(result) {
+    if (!els.cycleRows) return;
+
+    els.cycleRows.innerHTML = result.cycleRows.map(({ cycle, leader, team }) => `
+      <tr>
+        <td><strong>${escapeHtml(cycle.name)}</strong><small>${escapeHtml(fmt(cycle.passWan))} 通關</small></td>
+        <td>${escapeHtml(cycle.lowerGate.name)} / ${escapeHtml(cycle.upperGate.name)}</td>
+        <td><strong>${cycle.lowerCount} 個 ${escapeHtml(fmt(cycle.lowerGate.base))}</strong><small>+ ${cycle.upperCount} 個 ${escapeHtml(fmt(cycle.upperGate.base))}</small></td>
+        <td>${cycleProgressCell(leader)}</td>
+        <td>${cycleProgressCell(team)}</td>
+      </tr>
+    `).join("");
+  }
+
+  function cycleProgressCell(progress) {
+    const status = progress.passed ? "cleared" : "wip";
+    const label = progress.passed ? "通關" : "進行中";
+    const sub = progress.passed
+      ? `${fmt(progress.amount)} / ${fmt(progress.cycle.passWan)}`
+      : `${Math.round(progress.progress * 100)}%・差 ${fmt(progress.remaining)}`;
+
+    return `<span class="status-pill status-${status}">${escapeHtml(label)}</span><small>${escapeHtml(sub)}</small>`;
+  }
+
+  function renderMemberInlineStatus(result) {
+    result.positions.forEach((member) => {
+      const item = els.members.querySelector(`[data-member-id="${cssEscape(member.id)}"]`);
+      const status = item?.querySelector(".member-live-status");
+      if (!status) return;
+
+      status.innerHTML = `
+        <span>個別狀態</span>
+        <strong>${escapeHtml(cycleMainText(member.cycle))}</strong>
+        <small>${escapeHtml(member.gate ? `${member.gate.name}・${cycleSubText(member.cycle)}` : "尚未定位")}</small>
+      `;
+    });
+  }
+
   function renderMembers(result) {
     if (result.positions.length === 0) {
-      els.memberRows.innerHTML = `<tr><td class="empty-row" colspan="3">—</td></tr>`;
+      els.memberRows.innerHTML = `<tr><td class="empty-row" colspan="4">—</td></tr>`;
       return;
     }
 
@@ -655,6 +775,7 @@
         <td><strong>${escapeHtml(member.name || `隊員 ${member.idx + 1}`)}</strong><small>#${member.idx + 1}</small></td>
         <td>${member.wan > 0 ? escapeHtml(fmt(member.wan)) : "—"}</td>
         <td>${member.gate ? escapeHtml(member.gate.name) : "—"}</td>
+        <td><strong>${escapeHtml(cycleMainText(member.cycle))}</strong><small>${escapeHtml(cycleSubText(member.cycle))}</small></td>
       </tr>
     `).join("");
   }
