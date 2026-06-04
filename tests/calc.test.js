@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const core = require("../app.js");
 
-const { analyze, calcCascade, cycleStatusFor, CYCLES, gateFor, GATES, maxWanOf, teamTierFor, toWan } = core;
+const { analyze, calcCascade, cycleStatusFor, cycleStatusForTeamCoverage, CYCLES, gateFor, GATES, maxWanOf, teamTierFor, toWan } = core;
 
 function state(leaderAmount, memberAmounts = []) {
   return {
@@ -14,6 +14,14 @@ function state(leaderAmount, memberAmounts = []) {
         : [{ id: 1, v: String(amount) }]
     }))
   };
+}
+
+function membersAt(gateBase, count, startId = 1) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: startId + index,
+    name: `隊員 ${startId + index}`,
+    amounts: [{ id: 1, v: String(gateBase) }]
+  }));
 }
 
 assert.equal(toWan("12,000"), 1.2);
@@ -87,10 +95,48 @@ assert.equal(memberHighestOnly.steps[0].status, "cleared");
 
 const cycleTeam = analyze(state(0, [55, 22, 88]));
 assert.equal(cycleTeam.teamWan, 165);
-assert.equal(cycleTeam.teamCycle.cleared.name, "小輪迴");
-assert.equal(cycleTeam.teamCycle.current.name, "中輪迴");
+assert.equal(cycleTeam.teamAmountCycle.cleared.name, "小輪迴");
+assert.equal(cycleTeam.teamAmountCycle.current.name, "中輪迴");
+assert.equal(cycleTeam.teamCycle.current.name, "小輪迴");
 assert.equal(cycleTeam.positions[0].cycle.cleared.name, "小輪迴");
 assert.equal(cycleTeam.positions[1].cycle.current.name, "小輪迴");
+
+const smallCoveragePositions = core.memberPositions([
+  ...membersAt(2.2, 13),
+  ...membersAt(8.8, 3, 20)
+]);
+const smallCoverage = cycleStatusForTeamCoverage(smallCoveragePositions);
+assert.equal(smallCoverage.cleared.name, "小輪迴");
+assert.equal(smallCoverage.current.name, "中輪迴");
+assert.equal(smallCoverage.remaining, 638);
+
+const middleCoveragePositions = core.memberPositions([
+  ...membersAt(2.2, 13),
+  ...membersAt(8.8, 13, 20),
+  ...membersAt(22, 13, 40),
+  ...membersAt(88, 3, 60)
+]);
+const middleCoverage = cycleStatusForTeamCoverage(middleCoveragePositions);
+assert.equal(middleCoverage.cleared.name, "中輪迴");
+assert.equal(middleCoverage.current.name, "大輪迴");
+assert.equal(middleCoverage.remaining, 6380);
+
+const maxLeaderCycle = analyze({
+  ...state(0, []),
+  settings: { leaderCycleBasis: "max" },
+  leader: { name: "隊長", amounts: [{ id: 1, v: "55" }, { id: 2, v: "605" }] }
+});
+assert.equal(maxLeaderCycle.leaderWan, 660);
+assert.equal(maxLeaderCycle.leaderCycleWan, 605);
+assert.equal(maxLeaderCycle.leaderCycle.current.name, "中輪迴");
+
+const memberView = analyze({
+  ...state(0, [2.2, 88]),
+  settings: { viewMode: "member", selectedMemberId: 2 }
+});
+assert.equal(memberView.settings.viewMode, "member");
+assert.equal(memberView.selectedMember.name, "隊員 2");
+assert.equal(memberView.selectedMember.gate.name, "社會關");
 
 assert.equal(GATES.length, 10);
 assert.deepEqual(GATES.map((gate) => gate.base), [2.2, 8.8, 22, 88, 220, 880, 2200, 8800, 22000, 88000]);

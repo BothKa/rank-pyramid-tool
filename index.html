@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>階級三角形定位系統</title>
-    <link rel="stylesheet" href="./styles.css?v=20260605-carry" />
+    <link rel="stylesheet" href="./styles.css?v=20260605-modes" />
   </head>
   <body>
     <main class="app-shell">
@@ -19,7 +19,62 @@
           </div>
 
           <form id="rankForm" autocomplete="off">
-            <section class="form-section" aria-labelledby="leaderHeading">
+            <section class="form-section control-panel" aria-labelledby="settingsHeading">
+              <div class="section-title plain">
+                <h2 id="settingsHeading">檢視</h2>
+              </div>
+
+              <div class="control-stack">
+                <div class="control-row">
+                  <span class="control-label">視角</span>
+                  <div class="segmented-control" role="radiogroup" aria-label="視角">
+                    <label>
+                      <input data-setting="viewMode" name="viewMode" type="radio" value="leader" />
+                      <span>隊長</span>
+                    </label>
+                    <label>
+                      <input data-setting="viewMode" name="viewMode" type="radio" value="member" />
+                      <span>隊員</span>
+                    </label>
+                  </div>
+                </div>
+
+                <label class="field-label member-picker">
+                  <span>隊員</span>
+                  <select id="viewerMember"></select>
+                </label>
+
+                <div class="control-row">
+                  <span class="control-label">自己輪迴</span>
+                  <div class="segmented-control" role="radiogroup" aria-label="自己輪迴">
+                    <label>
+                      <input data-setting="leaderCycleBasis" name="leaderCycleBasis" type="radio" value="sum" />
+                      <span>加總</span>
+                    </label>
+                    <label>
+                      <input data-setting="leaderCycleBasis" name="leaderCycleBasis" type="radio" value="max" />
+                      <span>單筆</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="control-row">
+                  <span class="control-label">團隊輪迴</span>
+                  <div class="segmented-control" role="radiogroup" aria-label="團隊輪迴">
+                    <label>
+                      <input data-setting="teamCycleBasis" name="teamCycleBasis" type="radio" value="coverage" />
+                      <span>配置</span>
+                    </label>
+                    <label>
+                      <input data-setting="teamCycleBasis" name="teamCycleBasis" type="radio" value="amount" />
+                      <span>金額</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="form-section leader-edit" aria-labelledby="leaderHeading">
               <div class="section-title">
                 <h2 id="leaderHeading">隊長</h2>
                 <button class="icon-button" data-action="add-leader-amount" type="button" title="新增隊長金額" aria-label="新增隊長金額">+</button>
@@ -33,7 +88,7 @@
 
             <aside class="mobile-status" id="mobileStatus" aria-live="polite"></aside>
 
-            <section class="form-section" aria-labelledby="membersHeading">
+            <section class="form-section team-edit" aria-labelledby="membersHeading">
               <div class="section-title">
                 <h2 id="membersHeading">隊員</h2>
                 <button class="icon-button" data-action="add-member" type="button" title="新增隊員" aria-label="新增隊員">+</button>
@@ -46,7 +101,7 @@
         <section class="output-panel">
           <div class="result-strip" id="summary"></div>
 
-          <section class="pyramid-frame" aria-labelledby="pyramidHeading">
+          <section class="pyramid-frame team-only" aria-labelledby="pyramidHeading">
             <div class="panel-head compact">
               <div>
                 <p class="eyebrow">三色定位圖</p>
@@ -63,7 +118,7 @@
           </section>
 
           <section class="detail-grid">
-            <article class="detail-panel cycle-panel">
+            <article class="detail-panel cycle-panel team-only">
               <div class="section-title plain">
                 <h2>五大輪迴</h2>
               </div>
@@ -83,7 +138,7 @@
               </div>
             </article>
 
-            <article class="detail-panel">
+            <article class="detail-panel cascade-panel team-only">
               <div class="section-title plain">
                 <h2>級聯計算</h2>
               </div>
@@ -103,9 +158,9 @@
               </div>
             </article>
 
-            <article class="detail-panel">
+            <article class="detail-panel member-panel">
               <div class="section-title plain">
-                <h2>團隊定位</h2>
+                <h2 id="memberPanelTitle">團隊定位</h2>
               </div>
               <div class="table-wrap">
                 <table>
@@ -150,6 +205,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260605-carry"></script>
+    <script src="./app.js?v=20260605-modes"></script>
   </body>
 </html>

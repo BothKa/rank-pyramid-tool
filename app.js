@@ -61,7 +61,15 @@
     wip: "前進中"
   };
 
+  const DEFAULT_SETTINGS = {
+    viewMode: "leader",
+    selectedMemberId: null,
+    leaderCycleBasis: "sum",
+    teamCycleBasis: "coverage"
+  };
+
   const DEFAULT_STATE = {
+    settings: { ...DEFAULT_SETTINGS, selectedMemberId: 1 },
     leader: {
       name: "隊長",
       amounts: [{ id: 1, v: "880" }]
@@ -97,6 +105,10 @@
 
   function maxWanOf(amounts) {
     return amounts.reduce((max, amount) => Math.max(max, toWan(amount.v)), 0);
+  }
+
+  function sumWanOf(amounts) {
+    return amounts.reduce((sum, amount) => sum + toWan(amount.v), 0);
   }
 
   function cycleProgressAt(wan, cycle) {
@@ -139,6 +151,90 @@
     };
   }
 
+  function cycleRequirementsFor(cycle) {
+    return [
+      cycle.carryGate ? { gate: cycle.carryGate, count: cycle.carryCount } : null,
+      { gate: cycle.lowerGate, count: cycle.lowerCount },
+      { gate: cycle.upperGate, count: cycle.upperCount }
+    ].filter(Boolean);
+  }
+
+  function cycleStatusForTeamCoverage(positions) {
+    const counts = {};
+    positions.forEach((member) => {
+      if (!member.gate) return;
+      counts[member.gate.idx] = (counts[member.gate.idx] || 0) + 1;
+    });
+
+    const available = { ...counts };
+    const rows = [];
+    let cleared = null;
+    let current = null;
+    let currentProgress = null;
+
+    for (const cycle of CYCLES) {
+      const requirements = cycleRequirementsFor(cycle);
+      const missing = [];
+      let appliedWan = 0;
+      let remaining = 0;
+
+      requirements.forEach(({ gate, count }) => {
+        const have = available[gate.idx] || 0;
+        const used = Math.min(have, count);
+        const lack = Math.max(0, count - have);
+        appliedWan += used * gate.base;
+        remaining += lack * gate.base;
+        missing.push({ gate, count, have, used, missing: lack });
+      });
+
+      const passed = missing.every((item) => item.missing === 0);
+      const progress = cycle.segmentWan > 0 ? Math.min(1, appliedWan / cycle.segmentWan) : 0;
+      const row = {
+        kind: "coverage",
+        amount: appliedWan,
+        cycle,
+        requirements,
+        missing,
+        passed,
+        progress,
+        appliedWan,
+        remaining,
+        overflowWan: 0
+      };
+
+      rows.push({ cycle, progress: row });
+
+      if (passed) {
+        requirements.forEach(({ gate, count }) => {
+          available[gate.idx] = Math.max(0, (available[gate.idx] || 0) - count);
+        });
+        cleared = cycle;
+      } else if (!current) {
+        current = cycle;
+        currentProgress = row;
+      }
+    }
+
+    const lastCycle = CYCLES[CYCLES.length - 1];
+    const allCleared = cleared?.idx === lastCycle.idx;
+    const finalProgress = currentProgress || rows.at(-1)?.progress;
+
+    return {
+      kind: "coverage",
+      counts,
+      rows,
+      amount: finalProgress?.appliedWan || 0,
+      cleared,
+      current: current || lastCycle,
+      allCleared,
+      progress: finalProgress?.progress || 0,
+      remaining: allCleared ? 0 : finalProgress?.remaining || 0,
+      missing: allCleared ? [] : finalProgress?.missing || [],
+      appliedWan: finalProgress?.appliedWan || 0,
+      overflowWan: 0
+    };
+  }
+
   function fmt(value) {
     const n = Number(value);
     if (Number.isNaN(n)) return "—";
@@ -174,7 +270,7 @@
   }
 
   function calcCascade(leaderAmts, members) {
-    const leaderWan = leaderAmts.reduce((sum, amount) => sum + toWan(amount.v), 0);
+    const leaderWan = sumWanOf(leaderAmts);
     if (leaderWan <= 0) return { steps: [], leaderWan: 0, tc: {} };
 
     const tc = teamCoverage(members);
@@ -249,31 +345,45 @@
 
   function analyze(state) {
     const members = state.members || [];
+    const settings = normalizeSettings(state.settings, members);
     const cascade = calcCascade(state.leader.amounts || [], members);
     const positions = memberPositions(members);
     const effectiveCount = positions.filter((member) => member.wan > 0).length;
     const teamTier = teamTierFor(effectiveCount);
     const teamWan = teamWanOf(positions);
+    const leaderCycleWan = settings.leaderCycleBasis === "max"
+      ? maxWanOf(state.leader.amounts || [])
+      : cascade.leaderWan;
     const xian = xianGate(cascade.last, cascade.curr);
     const highIdx = teamHighGateIdx(positions);
     const shi = shiGate(xian, highIdx);
-    const leaderCycle = cycleStatusFor(cascade.leaderWan);
-    const teamCycle = cycleStatusFor(teamWan);
+    const leaderCycle = cycleStatusFor(leaderCycleWan);
+    const teamAmountCycle = cycleStatusFor(teamWan);
+    const teamCoverageCycle = cycleStatusForTeamCoverage(positions);
+    const teamCycle = settings.teamCycleBasis === "amount" ? teamAmountCycle : teamCoverageCycle;
     const cycleRows = CYCLES.map((cycle) => ({
       cycle,
-      leader: cycleProgressAt(cascade.leaderWan, cycle),
-      team: cycleProgressAt(teamWan, cycle)
+      leader: cycleProgressAt(leaderCycleWan, cycle),
+      team: settings.teamCycleBasis === "amount"
+        ? cycleProgressAt(teamWan, cycle)
+        : teamCoverageCycle.rows.find((row) => row.cycle.idx === cycle.idx)?.progress
     }));
 
     const leaderPersonalGate = gateFor(maxWanOf(state.leader.amounts));
+    const selectedMember = positions.find((member) => String(member.id) === String(settings.selectedMemberId)) || positions[0] || null;
 
     return {
       ...cascade,
+      settings,
       positions,
+      selectedMember,
       effectiveCount,
       teamTier,
       teamWan,
+      leaderCycleWan,
       leaderCycle,
+      teamAmountCycle,
+      teamCoverageCycle,
       teamCycle,
       cycleRows,
       xian,
@@ -282,6 +392,20 @@
       shi,
       leaderPersonalGate
     };
+  }
+
+  function normalizeSettings(settings, members = []) {
+    const clean = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+    if (!["leader", "member"].includes(clean.viewMode)) clean.viewMode = DEFAULT_SETTINGS.viewMode;
+    if (!["sum", "max"].includes(clean.leaderCycleBasis)) clean.leaderCycleBasis = DEFAULT_SETTINGS.leaderCycleBasis;
+    if (!["coverage", "amount"].includes(clean.teamCycleBasis)) clean.teamCycleBasis = DEFAULT_SETTINGS.teamCycleBasis;
+
+    const ids = members.map((member) => String(member.id));
+    if (!ids.includes(String(clean.selectedMemberId))) {
+      clean.selectedMemberId = members[0]?.id ?? null;
+    }
+
+    return clean;
   }
 
   function cloneState(state) {
@@ -294,12 +418,16 @@
     TEAM_TIERS,
     STATUS_TEXT,
     DEFAULT_STATE,
+    DEFAULT_SETTINGS,
     toWan,
     gateFor,
     teamTierFor,
     maxWanOf,
+    sumWanOf,
     cycleProgressAt,
     cycleStatusFor,
+    cycleStatusForTeamCoverage,
+    cycleRequirementsFor,
     memberPositions,
     teamWanOf,
     calcCascade,
@@ -326,6 +454,7 @@
 
   const els = {
     form: document.getElementById("rankForm"),
+    viewerMember: document.getElementById("viewerMember"),
     leaderName: document.getElementById("leaderName"),
     leaderAmounts: document.getElementById("leaderAmounts"),
     members: document.getElementById("members"),
@@ -335,6 +464,7 @@
     cycleRows: document.getElementById("cycleRows"),
     cascadeRows: document.getElementById("cascadeRows"),
     memberRows: document.getElementById("memberRows"),
+    memberPanelTitle: document.getElementById("memberPanelTitle"),
     amountTemplate: document.getElementById("amountTemplate"),
     memberTemplate: document.getElementById("memberTemplate"),
     resetExample: document.getElementById("resetExample")
@@ -364,6 +494,7 @@
       name: member.name || `隊員 ${index + 1}`,
       amounts: ensureAmounts(member.amounts)
     }));
+    clean.settings = normalizeSettings(clean.settings, clean.members);
     return clean;
   }
 
@@ -398,6 +529,7 @@
 
   function renderResults() {
     const result = analyze(state);
+    document.body.dataset.viewMode = result.settings.viewMode;
     renderSummary(result);
     renderMobileStatus(result);
     renderMemberInlineStatus(result);
@@ -408,11 +540,32 @@
   }
 
   function renderInputs() {
+    renderSettingsControls();
     if (document.activeElement !== els.leaderName) {
       els.leaderName.value = state.leader.name;
     }
     renderAmountList(els.leaderAmounts, state.leader.amounts, "leader");
     renderMemberList();
+  }
+
+  function renderSettingsControls() {
+    state.settings = normalizeSettings(state.settings, state.members);
+    document.querySelectorAll("[data-setting]").forEach((input) => {
+      input.checked = state.settings[input.dataset.setting] === input.value;
+    });
+
+    const active = document.activeElement;
+    if (els.viewerMember && active !== els.viewerMember) {
+      els.viewerMember.replaceChildren();
+      state.members.forEach((member, index) => {
+        const option = document.createElement("option");
+        option.value = String(member.id);
+        option.textContent = member.name || `隊員 ${index + 1}`;
+        option.selected = String(member.id) === String(state.settings.selectedMemberId);
+        els.viewerMember.append(option);
+      });
+      els.viewerMember.disabled = state.members.length === 0;
+    }
   }
 
   function renderAmountList(container, amounts, scope, memberId) {
@@ -486,33 +639,73 @@
   }
 
   function renderSummary(result) {
+    if (result.settings.viewMode === "member") {
+      renderMemberSummary(result);
+      return;
+    }
+
     const xianText = result.xian ? result.xian.name : "—";
     const shiText = result.shi ? result.shi.name : "—";
     const teamText = result.teamTier ? `${result.teamTier.label} ${result.teamTier.desc}` : "—";
     const progress = result.xianInProgress ? "前進中" : "已達真命";
     const personalText = result.leaderPersonalGate ? result.leaderPersonalGate.name : "—";
+    const leaderBasis = result.settings.leaderCycleBasis === "max" ? "最高單筆" : `${state.leader.amounts.length} 筆加總`;
+    const teamBasis = result.settings.teamCycleBasis === "amount" ? `${fmt(result.teamWan)}・金額加總` : "13/3 配置";
 
     els.summary.innerHTML = [
       metric("隊長總額", fmt(result.leaderWan), `${state.leader.amounts.length} 筆加總`),
       metric("隊長個人", personalText, result.leaderPersonalGate ? "個人最高金額定位" : "尚無有效金額"),
-      metric("自己輪迴", cycleMainText(result.leaderCycle), cycleSubText(result.leaderCycle)),
-      metric("團隊輪迴", cycleMainText(result.teamCycle), `${fmt(result.teamWan)}・${cycleSubText(result.teamCycle)}`),
+      metric("自己輪迴", cycleMainText(result.leaderCycle), `${leaderBasis}・${cycleSubText(result.leaderCycle)}`),
+      metric("團隊輪迴", cycleMainText(result.teamCycle), `${teamBasis}・${cycleSubText(result.teamCycle)}`),
       metric("先得後修", xianText, result.xian ? progress : "尚未定位"),
       metric("實得實修", shiText, result.teamHighIdx >= 0 ? `隊員最高 +2 上限` : "無隊員限制"),
       metric("有效隊員", `${result.effectiveCount} 人`, teamText)
     ].join("");
   }
 
+  function renderMemberSummary(result) {
+    const member = result.selectedMember;
+    if (!member) {
+      els.summary.innerHTML = [
+        metric("隊員", "—", "尚無隊員"),
+        metric("最高金額", "—", "尚未定位"),
+        metric("位置", "—", "尚未定位"),
+        metric("個別輪迴", "—", "尚未定位")
+      ].join("");
+      return;
+    }
+
+    els.summary.innerHTML = [
+      metric("隊員", member.name || `隊員 ${member.idx + 1}`, `#${member.idx + 1}`),
+      metric("最高金額", member.wan > 0 ? fmt(member.wan) : "—", `${(member.amounts || []).length} 筆最高`),
+      metric("位置", member.gate ? member.gate.name : "—", member.gate ? fmt(member.gate.base) : "尚未定位"),
+      metric("個別輪迴", cycleMainText(member.cycle), cycleSubText(member.cycle))
+    ].join("");
+  }
+
   function renderMobileStatus(result) {
     if (!els.mobileStatus) return;
+    els.mobileStatus.dataset.viewMode = result.settings.viewMode;
+
+    if (result.settings.viewMode === "member") {
+      const member = result.selectedMember;
+      els.mobileStatus.innerHTML = `
+        ${mobileStat("隊員", member?.name || "—", member ? `#${member.idx + 1}` : "尚無")}
+        ${mobileStat("位置", member?.gate?.name || "—", member?.wan > 0 ? fmt(member.wan) : "尚未")}
+        ${mobileStat("輪迴", cycleMainText(member?.cycle), cycleSubText(member?.cycle))}
+        ${mobileStat("差額", member?.cycle ? cycleGapText(member.cycle) : "—", "個別")}
+      `;
+      return;
+    }
 
     const shiText = result.shi ? result.shi.name : "—";
     const personalText = result.leaderPersonalGate ? result.leaderPersonalGate.name : "—";
+    const teamSub = result.settings.teamCycleBasis === "amount" ? fmt(result.teamWan) : "13/3配置";
 
     els.mobileStatus.innerHTML = `
       ${mobileStat("個人", personalText, "個人定位")}
       ${mobileStat("自己", cycleMainText(result.leaderCycle), cycleSubText(result.leaderCycle))}
-      ${mobileStat("團隊", cycleMainText(result.teamCycle), fmt(result.teamWan))}
+      ${mobileStat("團隊", cycleMainText(result.teamCycle), teamSub)}
       ${mobileStat("實得", shiText, result.teamHighIdx >= 0 ? "隊員 +2" : "無限制")}
       <button class="mobile-status-action" data-action="jump-pyramid" type="button">看圖</button>
     `;
@@ -525,9 +718,27 @@
 
   function cycleSubText(status) {
     if (!status?.current) return "尚未定位";
+    if (status.kind === "coverage") {
+      if (status.allCleared) return "已全數通關";
+      const gap = coverageMissingText(status);
+      if (status.cleared) return `${status.cleared.name}已通關・${gap}`;
+      return gap;
+    }
     if (status.allCleared) return status.overflowWan > 0 ? `已全數通關・餘 ${fmt(status.overflowWan)}` : "已全數通關";
     if (status.cleared) return `${status.cleared.name}已通關・差 ${fmt(status.remaining)}`;
     return `差 ${fmt(status.remaining)}`;
+  }
+
+  function cycleGapText(status) {
+    if (!status?.current) return "—";
+    if (status.kind === "coverage") return coverageMissingText(status);
+    return status.allCleared ? "已通關" : `差 ${fmt(status.remaining)}`;
+  }
+
+  function coverageMissingText(progress) {
+    const missing = (progress?.missing || []).filter((item) => item.missing > 0);
+    if (missing.length === 0) return "配置已達";
+    return `缺 ${missing.map((item) => `${item.gate.name}${item.missing}`).join("、")}`;
   }
 
   function mobileStat(label, value, sub) {
@@ -751,11 +962,11 @@
 
     els.cycleRows.innerHTML = result.cycleRows.map(({ cycle, leader, team }) => `
       <tr>
-        <td><strong>${escapeHtml(cycle.name)}</strong><small>${escapeHtml(fmt(cycle.cumulativePassWan))} 累計通關</small></td>
-        <td>${cycleGateCell(cycle)}</td>
-        <td>${cycleRequirementCell(cycle)}</td>
-        <td>${cycleProgressCell(leader)}</td>
-        <td>${cycleProgressCell(team)}</td>
+        <td data-label="輪迴"><strong>${escapeHtml(cycle.name)}</strong><small>${escapeHtml(fmt(cycle.cumulativePassWan))} 累計通關</small></td>
+        <td data-label="關卡">${cycleGateCell(cycle)}</td>
+        <td data-label="通關條件">${cycleRequirementCell(cycle)}</td>
+        <td data-label="隊長自己">${cycleProgressCell(leader)}</td>
+        <td data-label="${escapeHtml(result.settings.teamCycleBasis === "amount" ? "團隊金額" : "團隊配置")}">${cycleProgressCell(team)}</td>
       </tr>
     `).join("");
   }
@@ -779,6 +990,12 @@
     const status = progress.passed ? "cleared" : "wip";
     const label = progress.passed ? "通關" : "進行中";
     const applied = Math.min(progress.appliedWan, progress.cycle.segmentWan);
+    if (progress.kind === "coverage") {
+      const sub = progress.passed
+        ? "配置已達"
+        : `${Math.round(progress.progress * 100)}%・${coverageMissingText(progress)}`;
+      return `<span class="status-pill status-${status}">${escapeHtml(label)}</span><small>${escapeHtml(sub)}</small>`;
+    }
     const sub = progress.passed
       ? `${fmt(applied)} / ${fmt(progress.cycle.segmentWan)}`
       : `${Math.round(progress.progress * 100)}%・差 ${fmt(progress.remaining)}`;
@@ -801,12 +1018,20 @@
   }
 
   function renderMembers(result) {
-    if (result.positions.length === 0) {
+    const members = result.settings.viewMode === "member"
+      ? (result.selectedMember ? [result.selectedMember] : [])
+      : result.positions;
+
+    if (els.memberPanelTitle) {
+      els.memberPanelTitle.textContent = result.settings.viewMode === "member" ? "個別定位" : "團隊定位";
+    }
+
+    if (members.length === 0) {
       els.memberRows.innerHTML = `<tr><td class="empty-row" colspan="4">—</td></tr>`;
       return;
     }
 
-    els.memberRows.innerHTML = result.positions.map((member) => `
+    els.memberRows.innerHTML = members.map((member) => `
       <tr>
         <td><strong>${escapeHtml(member.name || `隊員 ${member.idx + 1}`)}</strong><small>#${member.idx + 1}</small></td>
         <td>${member.wan > 0 ? escapeHtml(fmt(member.wan)) : "—"}</td>
@@ -826,7 +1051,23 @@
 
   function handleFieldEdit(event) {
     const target = event.target;
-    if (!target || target.tagName !== "INPUT") return;
+    if (!target) return;
+
+    if (target.matches("[data-setting]")) {
+      state.settings = normalizeSettings(state.settings, state.members);
+      state.settings[target.dataset.setting] = target.value;
+      scheduleRender();
+      return;
+    }
+
+    if (target === els.viewerMember) {
+      state.settings = normalizeSettings(state.settings, state.members);
+      state.settings.selectedMemberId = target.value;
+      scheduleRender();
+      return;
+    }
+
+    if (target.tagName !== "INPUT") return;
 
     if (target.classList.contains("amount-input")) {
       const amount = findAmount(target.dataset.scope, target.dataset.amountId, target.dataset.memberId);
@@ -882,6 +1123,7 @@
 
     if (button.classList.contains("remove-member")) {
       state.members = state.members.filter((member) => String(member.id) !== String(button.dataset.memberId));
+      state.settings = normalizeSettings(state.settings, state.members);
       scheduleRender({ inputs: true });
     }
   });
