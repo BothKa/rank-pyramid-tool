@@ -460,6 +460,7 @@
     members: document.getElementById("members"),
     summary: document.getElementById("summary"),
     mobileStatus: document.getElementById("mobileStatus"),
+    pyramidHeading: document.getElementById("pyramidHeading"),
     pyramid: document.getElementById("pyramid"),
     cycleRows: document.getElementById("cycleRows"),
     cascadeRows: document.getElementById("cascadeRows"),
@@ -758,11 +759,18 @@
     const center = width / 2;
     const rowHeight = pyramidHeight / 5;
     const positions = {};
+    const isMemberView = result.settings.viewMode === "member";
+    const selectedGate = isMemberView ? result.selectedMember?.gate : null;
+    const selectedIdx = selectedGate ? selectedGate.idx : -1;
     const xianIdx = result.xian ? result.xian.idx : -1;
     const shiIdx = result.shi ? result.shi.idx : -1;
     const parts = [];
 
-    parts.push(`<svg class="pyramid-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="金字塔三色定位圖">`);
+    if (els.pyramidHeading) {
+      els.pyramidHeading.textContent = isMemberView ? "個人三角形" : "金字塔";
+    }
+
+    parts.push(`<svg class="pyramid-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${isMemberView ? "個人三角形定位圖" : "金字塔三色定位圖"}">`);
     parts.push(renderPyramidDefs());
     parts.push(`<rect class="pyramid-backdrop" x="0" y="0" width="${width}" height="${height}"></rect>`);
     parts.push(`<g class="pyramid-grid" aria-hidden="true">`);
@@ -790,7 +798,9 @@
         const points = isLeft
           ? `${left0},${y0} ${center},${y0} ${center},${y1} ${left1},${y1}`
           : `${center},${y0} ${right0},${y0} ${right1},${y1} ${center},${y1}`;
-        const gateZone = zone(gate.idx, shiIdx, xianIdx);
+        const gateZone = isMemberView
+          ? (selectedIdx >= 0 && gate.idx <= selectedIdx ? 0 : 2)
+          : zone(gate.idx, shiIdx, xianIdx);
         const fill = gateZone === 2 ? "url(#mutedGate)" : `url(#gateGradient${gate.idx})`;
         const cellClass = gateZone === 0 ? "is-solid" : gateZone === 1 ? "is-nominal" : "is-muted";
         const cx = isLeft
@@ -801,17 +811,9 @@
         positions[gate.idx] = { x: cx, y: cy };
         parts.push(`<polygon class="pyramid-cell ${cellClass}" points="${points}" fill="${fill}"></polygon>`);
 
-        if (tier < 4) {
-          parts.push(`<text class="gate-text" x="${cx}" y="${cy - 4}" text-anchor="middle">${escapeHtml(gate.name)}</text>`);
-          parts.push(`<text class="gate-subtext" x="${cx}" y="${cy + 18}" text-anchor="middle">${escapeHtml(fmt(gate.base))}</text>`);
-        } else {
-          const labelX = isLeft ? 92 : width - 92;
-          const labelY = gate.idx === 8 ? 72 : 104;
-          const anchor = isLeft ? "start" : "end";
-          parts.push(`<path class="external-callout" d="M ${cx} ${cy} C ${isLeft ? cx - 72 : cx + 72} ${cy - 8}, ${isLeft ? labelX + 96 : labelX - 96} ${labelY - 22}, ${labelX} ${labelY - 8}" stroke="${gate.col}"></path>`);
-          parts.push(`<text class="external-label" x="${labelX}" y="${labelY}" text-anchor="${anchor}">${escapeHtml(gate.name)}</text>`);
-          parts.push(`<text class="external-subtext" x="${labelX}" y="${labelY + 18}" text-anchor="${anchor}">${escapeHtml(fmt(gate.base))}</text>`);
-        }
+        const topClass = tier === 4 ? " is-top" : "";
+        parts.push(`<text class="gate-text${topClass}" x="${cx}" y="${cy - 4}" text-anchor="middle">${escapeHtml(gate.name)}</text>`);
+        parts.push(`<text class="gate-subtext${topClass}" x="${cx}" y="${cy + 18}" text-anchor="middle">${escapeHtml(fmt(gate.base))}</text>`);
       });
     }
 
@@ -820,10 +822,24 @@
     parts.push(...renderMarkers(result, positions));
     parts.push(`</svg>`);
     els.pyramid.innerHTML = parts.join("");
+    centerPersonalPyramid();
 
     function halfAt(y) {
       const progress = Math.max(0, Math.min(1, (y - top) / pyramidHeight));
       return (pyramidWidth / 2) * progress;
+    }
+
+    function centerPersonalPyramid() {
+      if (!isMemberView || selectedIdx < 0) return;
+      const base = positions[selectedIdx];
+      window.requestAnimationFrame(() => {
+        const svg = els.pyramid.querySelector(".pyramid-svg");
+        if (!svg) return;
+        const scale = svg.getBoundingClientRect().width / width;
+        const target = base.x * scale - els.pyramid.clientWidth / 2;
+        const max = els.pyramid.scrollWidth - els.pyramid.clientWidth;
+        els.pyramid.scrollLeft = Math.max(0, Math.min(max, target));
+      });
     }
   }
 
@@ -862,6 +878,14 @@
 
   function renderStatusRings(result, positions) {
     const parts = [];
+    if (result.settings.viewMode === "member") {
+      if (result.selectedMember?.gate) {
+        const base = positions[result.selectedMember.gate.idx];
+        parts.push(`<g class="status-ring personal-ring" transform="translate(${base.x} ${base.y})"><circle r="39"></circle><circle r="29"></circle></g>`);
+      }
+      return parts;
+    }
+
     if (result.xian) {
       const base = positions[result.xian.idx];
       parts.push(`<g class="status-ring xian-ring" transform="translate(${base.x} ${base.y})"><circle r="42"></circle><circle r="33"></circle></g>`);
@@ -876,6 +900,17 @@
   function renderMarkers(result, positions) {
     const parts = [];
     const grouped = new Map();
+
+    if (result.settings.viewMode === "member") {
+      const member = result.selectedMember;
+      if (!member?.gate) return parts;
+
+      const base = positions[member.gate.idx];
+      parts.push(`<g class="selected-member-marker" aria-label="${escapeHtml(member.name || "隊員")}個人定位" transform="translate(${base.x} ${base.y + 30})">`);
+      parts.push(`<circle r="17"></circle><text y="1">我</text>`);
+      parts.push(`</g>`);
+      return parts;
+    }
 
     result.positions.forEach((member) => {
       if (!member.gate) return;
