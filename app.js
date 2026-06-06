@@ -933,7 +933,7 @@
 
     els.summary.innerHTML = [
       metric("隊長總額", fmt(result.leaderWan), "六單位加總"),
-      metric("目前段數階段", phaseFocusText(result), phaseFocusSubText(result)),
+      metric("段數 PASS", `${phasePassCount(result)}/${result.phaseRows.length}`, phaseFocusText(result)),
       metric("下一目標", targetText, hasStarted && !result.curr ? "六關已補足" : `缺 ${gapText}`),
       metric("真正過關", `${clearedCount}/${PRIMARY_GATES.length} 關`, clearedGateText(result))
     ].join("");
@@ -964,8 +964,20 @@
 
     const focus = leaderFocus(result);
     const clearedText = clearedGateText(result);
+    const currentPhase = phaseFocusRow(result);
+    const phaseCount = result.phaseRows.length;
+    const passedCount = phasePassCount(result);
+    const dialNumber = currentPhase ? currentPhase.phase.idx + 1 : phaseCount;
+    const dialLabel = currentPhase ? "進行中" : "全部 PASS";
+    const dialColor = currentPhase ? currentPhase.phase.col : "#147b55";
+    const dialProgress = overallPhaseProgress(result);
 
     els.statusOverview.innerHTML = `
+      <div class="status-dial" style="--stage-color: ${dialColor}; --stage-progress: ${dialProgress}%;">
+        <span>段數</span>
+        <strong>${escapeHtml(dialNumber)}</strong>
+        <small>${escapeHtml(dialLabel)}</small>
+      </div>
       <div class="status-copy">
         <span class="status-kicker">目前段數階段</span>
         <h2>${escapeHtml(phaseFocusText(result))}</h2>
@@ -977,8 +989,9 @@
         <small>${escapeHtml(focus.note)}</small>
       </div>
       <div class="status-mini">
-        <span>已真正過關</span>
-        <strong>${escapeHtml(clearedText)}</strong>
+        <span>PASS / 真正</span>
+        <strong>${escapeHtml(`${passedCount}/${phaseCount} 段`)}</strong>
+        <small>${escapeHtml(clearedText)}</small>
       </div>
     `;
   }
@@ -1056,14 +1069,28 @@
     }).join("");
   }
 
+  function phaseFocusRow(result) {
+    return result.phaseRows.find((row) => !row.passed) || null;
+  }
+
+  function phasePassCount(result) {
+    return result.phaseRows.filter((row) => row.passed).length;
+  }
+
+  function overallPhaseProgress(result) {
+    const last = result.phaseRows.at(-1);
+    if (!last) return 0;
+    return pct(result.leaderWan, last.phase.passWan);
+  }
+
   function phaseFocusText(result) {
-    const current = result.phaseRows.find((row) => !row.passed);
+    const current = phaseFocusRow(result);
     if (current) return `${current.phase.name}・${current.passed ? "PASS" : "未 PASS"}`;
     return "五段數・全部 PASS";
   }
 
   function phaseFocusSubText(result) {
-    const current = result.phaseRows.find((row) => !row.passed);
+    const current = phaseFocusRow(result);
     if (current) return `還差 ${fmt(current.missing)} 到${current.phase.name} PASS`;
     const last = result.phaseRows.at(-1);
     return last ? `已達 ${fmt(last.phase.passWan)} 累計門檻` : "等待隊長單位數";
@@ -1197,8 +1224,8 @@
       : (result.last ? "六關真命與真正已補足" : `真命缺 ${ZHEN_MING_UNITS}，真正缺 ${ZHEN_ZHENG_UNITS}`);
 
     els.actionList.innerHTML = [
-      actionCard("先得後修", focus, focusSub, "primary"),
-      actionCard("六關主軸", "個人 / 家庭 / 事業 / 社會 / 國家 / 民族", `真正過關 ${clearedCount}/${PRIMARY_GATES.length}`, "neutral"),
+      actionCard("下一步行動", focus, focusSub, "primary"),
+      actionCard("段數 PASS", `${phasePassCount(result)}/${result.phaseRows.length}`, phaseFocusSubText(result), "neutral"),
       actionCard("缺少狀態", nextGate?.name || "—", missingText, "soft")
     ].join("");
   }
