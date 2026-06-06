@@ -55,11 +55,13 @@
   });
 
   const STATUS_TEXT = {
-    covered: "隊員覆蓋",
-    cleared: "清關",
-    at_zm: "真命已達",
-    wip: "前進中"
+    covered: "團隊真正覆蓋",
+    cleared: "真正過關",
+    at_zm: "真命過關",
+    wip: "真命前進中"
   };
+
+  const EPSILON = 1e-9;
 
   const DEFAULT_SETTINGS = {
     viewMode: "leader",
@@ -109,6 +111,10 @@
 
   function sumWanOf(amounts) {
     return amounts.reduce((sum, amount) => sum + toWan(amount.v), 0);
+  }
+
+  function atLeast(value, target) {
+    return value + EPSILON >= target;
   }
 
   function cycleProgressAt(wan, cycle) {
@@ -282,28 +288,38 @@
       const tAmt = cnt * gate.base;
       const zz = gate.base * 13;
       const zm = gate.base * 3;
-      const need = Math.max(0, zz - tAmt);
+      const zmNeed = Math.max(0, zm - tAmt);
+      const zzNeed = Math.max(0, zz - tAmt);
 
-      if (tAmt >= zz) {
-        steps.push({ g: gate, status: "covered", cnt, tAmt, zz, zm, rem });
+      if (atLeast(tAmt, zz)) {
+        steps.push({ g: gate, status: "covered", cnt, tAmt, zz, zm, zmNeed, zzNeed, target: "zz", targetNeed: 0, gap: 0, rem });
         continue;
       }
 
-      if (rem >= need) {
-        rem -= need;
-        steps.push({ g: gate, status: "cleared", cnt, tAmt, zz, zm, need, rem });
+      if (atLeast(rem, zzNeed)) {
+        rem -= zzNeed;
+        steps.push({ g: gate, status: "cleared", cnt, tAmt, zz, zm, need: zzNeed, zmNeed, zzNeed, target: "zz", targetNeed: zzNeed, gap: 0, rem });
       } else {
         const combined = rem + tAmt;
+        const reachedZm = atLeast(combined, zm);
+        const target = reachedZm ? "zz" : "zm";
+        const targetNeed = target === "zz" ? zzNeed : zmNeed;
+        const targetTotal = target === "zz" ? zz : zm;
         steps.push({
           g: gate,
-          status: combined >= zm ? "at_zm" : "wip",
+          status: reachedZm ? "at_zm" : "wip",
           cnt,
           tAmt,
           zz,
           zm,
+          zmNeed,
+          zzNeed,
+          target,
+          targetNeed,
+          gap: Math.max(0, targetTotal - combined),
           combined,
           rem,
-          pct: combined / zz
+          pct: targetTotal > 0 ? combined / targetTotal : 0
         });
         break;
       }
@@ -973,9 +989,9 @@
 
     els.cascadeRows.innerHTML = result.steps.map((step) => {
       const coverage = `${step.cnt} 人 / ${fmt(step.tAmt)}`;
-      const need = step.status === "cleared" ? fmt(step.need) : step.status === "covered" ? "0萬" : fmt(Math.max(0, step.zz - step.tAmt));
+      const need = step.status === "covered" ? "0萬" : `${step.target === "zm" ? "真命 " : "真正 "}${fmt(step.targetNeed ?? step.need ?? 0)}`;
       const rem = step.status === "wip" || step.status === "at_zm"
-        ? `${fmt(step.rem)} / 合計 ${fmt(step.combined)}`
+        ? `${fmt(step.rem)} / 合計 ${fmt(step.combined)} / 差 ${fmt(step.gap)}`
         : fmt(step.rem);
       const baseLine = `真命 ${fmt(step.zm)}；真正 ${fmt(step.zz)}`;
       const pct = step.pct == null ? "" : `<small>${Math.round(step.pct * 100)}%</small>`;

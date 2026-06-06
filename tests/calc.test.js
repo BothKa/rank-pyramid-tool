@@ -59,6 +59,8 @@ assert.equal(case660.leaderWan, 660);
 assert.equal(case660.curr.status, "wip");
 assert.equal(case660.curr.g.name, "社會關");
 assert.equal(Number(case660.curr.rem.toFixed(1)), 237.6);
+assert.equal(case660.curr.target, "zm");
+assert.equal(Number(case660.curr.gap.toFixed(1)), 26.4);
 assert.equal(case660.xian.name, "社會關");
 assert.equal(case660.xianInProgress, true);
 assert.equal(case660.shi.name, "事業關");
@@ -81,6 +83,17 @@ const case1100 = analyze(state(1100, [2.2, 2.2, 2.2]));
 assert.equal(case1100.curr.status, "at_zm");
 assert.equal(case1100.xian.name, "國家關");
 assert.equal(case1100.shi.name, "事業關");
+
+const solo660 = analyze(state(660, []));
+assert.equal(solo660.curr.status, "wip");
+assert.equal(solo660.curr.g.name, "社會關");
+assert.equal(solo660.curr.target, "zm");
+assert.equal(Number(solo660.curr.gap.toFixed(1)), 33);
+
+const exactZhenMing = analyze(state(6.6, []));
+assert.equal(exactZhenMing.curr.status, "at_zm");
+assert.equal(exactZhenMing.curr.target, "zz");
+assert.equal(exactZhenMing.xian.name, "家庭關");
 
 const noTeam = analyze(state(880, []));
 assert.equal(noTeam.teamHighIdx, -1);
