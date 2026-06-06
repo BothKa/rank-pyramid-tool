@@ -934,7 +934,7 @@
     els.summary.innerHTML = [
       metric("隊長總額", fmt(result.leaderWan), "六單位加總"),
       metric("段數 PASS", `${phasePassCount(result)}/${result.phaseRows.length}`, phaseFocusText(result)),
-      metric("下一目標", targetText, hasStarted && !result.curr ? "六關已補足" : `缺 ${gapText}`),
+      metric("先補目標", targetText, hasStarted && !result.curr ? "六關已補足" : `缺 ${gapText}`),
       metric("真正過關", `${clearedCount}/${PRIMARY_GATES.length} 關`, clearedGateText(result))
     ].join("");
   }
@@ -997,24 +997,8 @@
   }
 
   function leaderFocus(result) {
-    if (result.curr) {
-      const step = result.curr;
-      const targetName = step.target === "zm" ? "真命" : "真正";
-      const targetTotal = step.target === "zm" ? step.zm : step.zz;
-      const guidance = targetGuidance(step);
-      const title = `${step.g.name}・${STATUS_TEXT[step.status]}`;
-      const sub = step.gap > 0
-        ? `還差 ${fmt(step.gap)} 到${step.g.name}${targetName}`
-        : `已達${step.g.name}${targetName}`;
-      return {
-        title,
-        sub,
-        badge: "補額目標",
-        value: guidance.value,
-        note: `${guidance.note}・${fmt(step.combined || 0)} / ${fmt(targetTotal)}`,
-        guidance
-      };
-    }
+    const phaseGuidance = phaseTargetGuidance(result);
+    if (phaseGuidance) return phaseGuidance;
 
     if (result.last) {
       return {
@@ -1030,9 +1014,63 @@
       title: "尚未定位",
       sub: "等待隊長單位數",
       badge: "補額目標",
-      value: `剩餘 ${PRIMARY_GATES[0].name.replace("關", "")} ${ZHEN_MING_UNITS} 個`,
-      note: `先達${PRIMARY_GATES[0].name}真命・0萬 / ${fmt(PRIMARY_GATES[0].zhenMingWan)}`
+      value: "剩餘 個人 13 個 + 家庭 3 個",
+      note: `等值 ${fmt(PHASES[0].segmentWan)}・到第一段數 PASS`
     };
+  }
+
+  function phaseTargetGuidance(result) {
+    const row = phaseFocusRow(result);
+    if (!row) {
+      return {
+        title: "五段數・全部 PASS",
+        sub: "五段數已完成",
+        badge: "補額目標",
+        value: "五段數已 PASS",
+        note: "目前沒有段數缺口"
+      };
+    }
+
+    const parts = phaseRemainingParts(row);
+    const value = parts.length > 0
+      ? `剩餘 ${parts.map((part) => `${part.gateName} ${fmtCount(part.missingUnits)} 個`).join(" + ")}`
+      : `${row.phase.name} PASS`;
+    const direction = parts.length > 0
+      ? `先補${parts.map((part) => `${part.gateName} ${fmtCount(part.missingUnits)} 個`).join("，再補")}`
+      : "已補足";
+
+    return {
+      title: `${row.phase.name}・再接再厲`,
+      sub: `還差 ${fmt(row.missing)} 到${row.phase.name} PASS`,
+      badge: "補額目標",
+      value,
+      note: `等值 ${fmt(row.missing)}・到${row.phase.name} PASS・${direction}`,
+      parts
+    };
+  }
+
+  function phaseRemainingParts(row) {
+    const phase = row.phase;
+    const lowerNeedWan = phase.lowerBase * phase.lowerCount;
+    const lowerAppliedWan = Math.min(row.appliedWan, lowerNeedWan);
+    const upperAppliedWan = Math.max(0, row.appliedWan - lowerNeedWan);
+    const lowerDoneUnits = Math.min(phase.lowerCount, lowerAppliedWan / phase.lowerBase);
+    const upperDoneUnits = Math.min(phase.upperCount, upperAppliedWan / phase.upperBase);
+    const parts = [
+      {
+        gateName: phase.lowerGate.name.replace("關", ""),
+        doneUnits: lowerDoneUnits,
+        totalUnits: phase.lowerCount,
+        missingUnits: Math.max(0, phase.lowerCount - lowerDoneUnits)
+      },
+      {
+        gateName: phase.upperGate.name.replace("關", ""),
+        doneUnits: upperDoneUnits,
+        totalUnits: phase.upperCount,
+        missingUnits: Math.max(0, phase.upperCount - upperDoneUnits)
+      }
+    ];
+    return parts.filter((part) => part.missingUnits > EPSILON);
   }
 
   function targetGuidance(step) {
@@ -1308,7 +1346,7 @@
     els.mobileStatus.innerHTML = `
       ${mobileStat("總額", fmt(result.leaderWan), "六單位")}
       ${mobileStat("段數", phaseFocusText(result), "目前段數階段")}
-      ${mobileStat("缺口", gap, result.curr ? "下一目標" : "已補足")}
+      ${mobileStat("缺口", gap, result.curr ? "先補目標" : "已補足")}
       ${mobileStat("真正", `${clearedCount}/${PRIMARY_GATES.length}`, "六關")}
     `;
   }
