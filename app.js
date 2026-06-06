@@ -1091,6 +1091,11 @@
   }
 
   function renderSummary(result) {
+    if (!els.summary || els.summary.hidden) {
+      els.summary?.replaceChildren();
+      return;
+    }
+
     const clearedCount = result.steps.filter((step) => step.status === "cleared" || step.status === "covered").length;
     const hasStarted = Boolean(result.curr || result.last);
     const targetText = result.curr
@@ -1107,6 +1112,11 @@
   }
 
   function renderMemberSummary(result) {
+    if (!els.summary || els.summary.hidden) {
+      els.summary?.replaceChildren();
+      return;
+    }
+
     const member = result.selectedMember;
     if (!member) {
       els.summary.innerHTML = [
@@ -1130,10 +1140,8 @@
     if (!els.statusOverview) return;
 
     const focus = leaderFocus(result);
-    const clearedText = clearedGateText(result);
     const currentPhase = phaseFocusRow(result);
     const phaseCount = result.phaseRows.length;
-    const passedCount = phasePassCount(result);
     const dialNumber = currentPhase ? currentPhase.phase.idx + 1 : phaseCount;
     const dialLabel = currentPhase ? "進行中" : "全部 PASS";
     const dialColor = currentPhase ? currentPhase.phase.col : "#147b55";
@@ -1154,11 +1162,6 @@
         <span>${escapeHtml(focus.badge)}</span>
         <strong>${escapeHtml(focus.value)}</strong>
         <small>${escapeHtml(focus.note)}</small>
-      </div>
-      <div class="status-mini">
-        <span>PASS / 真正</span>
-        <strong>${escapeHtml(`${passedCount}/${phaseCount} 段`)}</strong>
-        <small>${escapeHtml(clearedText)}</small>
       </div>
     `;
   }
