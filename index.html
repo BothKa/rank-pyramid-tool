@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>五大關卡定位系統</title>
-    <link rel="stylesheet" href="./styles.css?v=20260606-carry-forward" />
+    <title>六大關卡定位系統</title>
+    <link rel="stylesheet" href="./styles.css?v=20260606-six-gates" />
   </head>
   <body>
     <main class="app-shell">
@@ -12,7 +12,7 @@
         <aside class="input-panel">
           <div class="panel-head">
             <div>
-              <p class="eyebrow">五大關卡</p>
+              <p class="eyebrow">六大關卡</p>
               <h1>關卡階梯</h1>
             </div>
             <button class="ghost-button" id="resetExample" type="button">範例</button>
@@ -101,6 +101,16 @@
         <section class="output-panel">
           <section class="status-overview" id="statusOverview" aria-live="polite"></section>
           <div class="result-strip" id="summary"></div>
+
+          <section class="phase-panel" aria-labelledby="phaseHeading">
+            <div class="section-title plain">
+              <div>
+                <p class="eyebrow">階段亮燈</p>
+                <h2 id="phaseHeading">三階段通過狀態</h2>
+              </div>
+            </div>
+            <div class="phase-lights" id="phaseLights"></div>
+          </section>
 
           <section class="journey-panel" aria-labelledby="journeyHeading">
             <div class="section-title plain">
@@ -240,6 +250,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260606-carry-forward"></script>
+    <script src="./app.js?v=20260606-six-gates"></script>
   </body>
 </html>

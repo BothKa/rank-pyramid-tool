@@ -73,8 +73,24 @@
   const ZHEN_MING_UNITS = 3;
   const ZHEN_ZHENG_UNITS = 13;
   const EPSILON = 1e-9;
-  const PRIMARY_GATE_COUNT = 5;
+  const PRIMARY_GATE_COUNT = 6;
   const PRIMARY_GATES = GATES.slice(0, PRIMARY_GATE_COUNT);
+  const PHASES = [
+    { idx: 0, name: "第一階段", lowerGate: GATES[0], upperGate: GATES[1] },
+    { idx: 1, name: "第二階段", lowerGate: GATES[2], upperGate: GATES[3] },
+    { idx: 2, name: "第三階段", lowerGate: GATES[4], upperGate: GATES[5] }
+  ].map((phase) => {
+    const lowerCount = ZHEN_ZHENG_UNITS;
+    const upperCount = ZHEN_MING_UNITS;
+    const passWan = phase.lowerGate.base * lowerCount + phase.upperGate.base * upperCount;
+    return {
+      ...phase,
+      lowerCount,
+      upperCount,
+      passWan,
+      col: phase.upperGate.col
+    };
+  });
 
   const DEFAULT_SETTINGS = {
     viewMode: "leader",
@@ -257,6 +273,21 @@
   function countProgressForWan(wan, gate) {
     if (!gate?.base) return countProgressForUnits(0);
     return countProgressForUnits((Number(wan) || 0) / gate.base);
+  }
+
+  function phaseStatusFor(wan) {
+    const amount = Math.max(0, Number(wan) || 0);
+    return PHASES.map((phase) => {
+      const appliedWan = Math.min(amount, phase.passWan);
+      return {
+        phase,
+        amount,
+        appliedWan,
+        passed: atLeast(amount, phase.passWan),
+        progress: phase.passWan > 0 ? Math.min(1, appliedWan / phase.passWan) : 0,
+        missing: Math.max(0, phase.passWan - amount)
+      };
+    });
   }
 
   function cycleProgressAt(wan, cycle) {
@@ -521,6 +552,7 @@
     const teamAmountCycle = cycleStatusFor(teamWan);
     const teamCoverageCycle = cycleStatusForTeamCoverage(positions);
     const teamCycle = settings.teamCycleBasis === "amount" ? teamAmountCycle : teamCoverageCycle;
+    const phaseRows = phaseStatusFor(cascade.leaderWan);
     const cycleRows = CYCLES.map((cycle) => ({
       cycle,
       leader: cycleProgressAt(leaderCycleWan, cycle),
@@ -545,6 +577,7 @@
       teamAmountCycle,
       teamCoverageCycle,
       teamCycle,
+      phaseRows,
       cycleRows,
       xian,
       xianInProgress: cascade.curr?.status === "wip",
@@ -575,6 +608,7 @@
   const core = {
     GATES,
     PRIMARY_GATES,
+    PHASES,
     CYCLES,
     TEAM_TIERS,
     STATUS_TEXT,
@@ -594,6 +628,7 @@
     leaderAmountsFromUnitCounts,
     countProgressForUnits,
     countProgressForWan,
+    phaseStatusFor,
     cycleProgressAt,
     cycleStatusFor,
     cycleStatusForTeamCoverage,
@@ -632,6 +667,7 @@
     statusOverview: document.getElementById("statusOverview"),
     summary: document.getElementById("summary"),
     mobileStatus: document.getElementById("mobileStatus"),
+    phaseLights: document.getElementById("phaseLights"),
     gateStepper: document.getElementById("gateStepper"),
     actionList: document.getElementById("actionList"),
     waterfall: document.getElementById("waterfall"),
@@ -710,6 +746,7 @@
     document.body.dataset.viewMode = result.settings.viewMode;
     renderStatusOverview(result);
     renderSummary(result);
+    renderPhaseLights(result);
     renderGateStepper(result);
     renderActionList(result);
     renderWaterfall(result);
@@ -887,9 +924,9 @@
     const gapText = result.curr ? fmt(result.curr.gap) : (result.last ? "0萬" : fmt(PRIMARY_GATES[0].zhenMingWan));
 
     els.summary.innerHTML = [
-      metric("隊長總額", fmt(result.leaderWan), "五單位加總"),
+      metric("隊長總額", fmt(result.leaderWan), "六單位加總"),
       metric("目前狀態", focus.title, focus.sub),
-      metric("下一目標", targetText, hasStarted && !result.curr ? "五關已補足" : `缺 ${gapText}`),
+      metric("下一目標", targetText, hasStarted && !result.curr ? "六關已補足" : `缺 ${gapText}`),
       metric("真正過關", `${clearedCount}/${PRIMARY_GATES.length} 關`, clearedGateText(result))
     ].join("");
   }
@@ -959,8 +996,8 @@
     if (result.last) {
       return {
         title: `${result.last.g.name}・真正過關`,
-        sub: "五大關卡已補足",
-        badge: "五關後餘額",
+        sub: "六大關卡已補足",
+        badge: "六關後餘額",
         value: fmt(result.last.rem),
         note: "保留後續使用"
       };
@@ -980,6 +1017,35 @@
       .filter((step) => step.status === "cleared" || step.status === "covered")
       .map((step) => step.g.name);
     return cleared.length > 0 ? cleared.join("、") : "尚未真正過關";
+  }
+
+  function renderPhaseLights(result) {
+    if (!els.phaseLights) return;
+    const currentIndex = result.phaseRows.findIndex((row) => !row.passed);
+
+    els.phaseLights.innerHTML = result.phaseRows.map((row) => {
+      const phase = row.phase;
+      const className = row.passed
+        ? "is-passed"
+        : (phase.idx === currentIndex ? "is-current" : "is-waiting");
+      const status = row.passed ? "通過亮燈" : "尚未亮燈";
+      const missingText = row.passed ? "已達門檻" : `差 ${fmt(row.missing)}`;
+      const progress = Math.round(row.progress * 100);
+      const pairText = `${phase.lowerGate.name.replace("關", "")} ${fmt(phase.lowerGate.base)} × ${phase.lowerCount} + ${phase.upperGate.name.replace("關", "")} ${fmt(phase.upperGate.base)} × ${phase.upperCount}`;
+
+      return `
+        <article class="phase-card ${className}" style="--phase-color: ${phase.col}; --phase-progress: ${progress}%;">
+          <div class="phase-head">
+            <span>${phase.idx + 1}</span>
+            <strong>${escapeHtml(phase.name)}</strong>
+            <b>${escapeHtml(status)}</b>
+          </div>
+          <p>${escapeHtml(pairText)}</p>
+          <div class="phase-bar" aria-hidden="true"><i></i></div>
+          <small>門檻 ${escapeHtml(fmt(phase.passWan))}・${escapeHtml(missingText)}</small>
+        </article>
+      `;
+    }).join("");
   }
 
   function renderGateStepper(result) {
@@ -1107,11 +1173,11 @@
     const countState = gateCountState(result, nextGate);
     const missingText = result.curr
       ? `真命缺 ${fmtCount(countState.zhenMing.missing)}，真正缺 ${fmtCount(countState.zhenZheng.missing)}`
-      : (result.last ? "五關真命與真正已補足" : `真命缺 ${ZHEN_MING_UNITS}，真正缺 ${ZHEN_ZHENG_UNITS}`);
+      : (result.last ? "六關真命與真正已補足" : `真命缺 ${ZHEN_MING_UNITS}，真正缺 ${ZHEN_ZHENG_UNITS}`);
 
     els.actionList.innerHTML = [
       actionCard("先得後修", focus, focusSub, "primary"),
-      actionCard("五關主軸", "個人 / 家庭 / 事業 / 社會 / 國家", `真正過關 ${clearedCount}/${PRIMARY_GATES.length}`, "neutral"),
+      actionCard("六關主軸", "個人 / 家庭 / 事業 / 社會 / 國家 / 民族", `真正過關 ${clearedCount}/${PRIMARY_GATES.length}`, "neutral"),
       actionCard("缺少狀態", nextGate?.name || "—", missingText, "soft")
     ].join("");
   }
@@ -1174,10 +1240,10 @@
     const gap = result.curr ? fmt(result.curr.gap) : (result.last ? "0萬" : fmt(PRIMARY_GATES[0].zhenMingWan));
 
     els.mobileStatus.innerHTML = `
-      ${mobileStat("總額", fmt(result.leaderWan), "五單位")}
+      ${mobileStat("總額", fmt(result.leaderWan), "六單位")}
       ${mobileStat("狀態", focus.value, focus.badge)}
       ${mobileStat("缺口", gap, result.curr ? "下一目標" : "已補足")}
-      ${mobileStat("真正", `${clearedCount}/${PRIMARY_GATES.length}`, "五關")}
+      ${mobileStat("真正", `${clearedCount}/${PRIMARY_GATES.length}`, "六關")}
     `;
   }
 

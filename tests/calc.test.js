@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const core = require("../app.js");
 
-const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, CYCLES, gateFor, GATES, PRIMARY_GATES, leaderTotalWanFromUnitCounts, maxWanOf, teamTierFor, toWan, unitCountsFromWan } = core;
+const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, CYCLES, gateFor, GATES, PHASES, PRIMARY_GATES, leaderTotalWanFromUnitCounts, maxWanOf, phaseStatusFor, teamTierFor, toWan, unitCountsFromWan } = core;
 
 function state(leaderAmount, memberAmounts = []) {
   return {
@@ -35,16 +35,17 @@ assert.equal(toWan("100000000元"), 10000);
 assert.equal(toWan("22000萬"), 22000);
 assert.equal(toWan("-1"), 0);
 
-assert.deepEqual(PRIMARY_GATES.map((gate) => gate.name), ["個人關", "家庭關", "事業關", "社會關", "國家關"]);
+assert.deepEqual(PRIMARY_GATES.map((gate) => gate.name), ["個人關", "家庭關", "事業關", "社會關", "國家關", "民族關"]);
 assert.equal(leaderTotalWanFromUnitCounts([
   { gateIdx: 0, v: "13" },
   { gateIdx: 1, v: "13" },
   { gateIdx: 2, v: "13" },
   { gateIdx: 3, v: "2.625" },
-  { gateIdx: 4, v: "" }
+  { gateIdx: 4, v: "" },
+  { gateIdx: 5, v: "" }
 ]), 660);
 const unitCounts660 = unitCountsFromWan(660);
-assert.deepEqual(unitCounts660.map((item) => item.v), ["13", "13", "13", "2.625", ""]);
+assert.deepEqual(unitCounts660.map((item) => item.v), ["13", "13", "13", "2.625", "", ""]);
 assert.equal(Number(leaderTotalWanFromUnitCounts(unitCounts660).toFixed(1)), 660);
 
 const carryForwardTwoTwoWan = leaderTotalWanFromUnitCounts([
@@ -93,6 +94,19 @@ assert.equal(cycleStatusFor(660).remaining, 33);
 assert.equal(cycleStatusFor(693).cleared.name, "中輪迴");
 assert.equal(cycleStatusFor(693).current.name, "大輪迴");
 assert.equal(cycleStatusFor(708873).allCleared, true);
+
+assert.deepEqual(PHASES.map((phase) => phase.name), ["第一階段", "第二階段", "第三階段"]);
+assert.deepEqual(PHASES.map((phase) => phase.passWan), [55, 550, 5500]);
+assert.deepEqual(PHASES.map((phase) => [phase.lowerGate.name, phase.upperGate.name]), [
+  ["個人關", "家庭關"],
+  ["事業關", "社會關"],
+  ["國家關", "民族關"]
+]);
+assert.deepEqual(phaseStatusFor(54.9).map((row) => row.passed), [false, false, false]);
+assert.deepEqual(phaseStatusFor(55).map((row) => row.passed), [true, false, false]);
+assert.deepEqual(phaseStatusFor(550).map((row) => row.passed), [true, true, false]);
+assert.deepEqual(phaseStatusFor(5500).map((row) => row.passed), [true, true, true]);
+assert.equal(phaseStatusFor(660)[2].missing, 4840);
 
 const case660 = analyze(state(660, [2.2, 2.2, 2.2]));
 assert.equal(case660.leaderWan, 660);
@@ -146,8 +160,10 @@ assert.equal(noTeam.teamHighIdx, -1);
 assert.equal(noTeam.shi.name, noTeam.xian.name);
 
 const primaryOnlyHuge = analyze({ ...state(10000, []), primaryOnly: true });
-assert.equal(primaryOnlyHuge.xian.name, "國家關");
-assert.equal(primaryOnlyHuge.curr, undefined);
+assert.equal(primaryOnlyHuge.curr.g.name, "民族關");
+assert.equal(primaryOnlyHuge.curr.status, "at_zm");
+assert.equal(primaryOnlyHuge.xian.name, "民族關");
+assert.equal(Number(primaryOnlyHuge.curr.gap.toFixed(1)), 5873);
 
 const memberHighestOnly = calcCascade([{ v: "28.6" }], [
   { amounts: [{ v: "2.2" }, { v: "8.8" }] }
