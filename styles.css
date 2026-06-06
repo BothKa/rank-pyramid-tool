@@ -981,9 +981,9 @@ body[data-view-mode="member"] .team-edit {
 .waterfall-total,
 .waterfall-row {
   display: grid;
-  grid-template-columns: minmax(112px, 0.8fr) minmax(110px, 1fr) auto minmax(120px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
-  align-items: center;
+  align-items: stretch;
   border: 1px solid rgba(101, 113, 122, 0.17);
   border-radius: 8px;
   background: #ffffff;
@@ -991,7 +991,6 @@ body[data-view-mode="member"] .team-edit {
 }
 
 .waterfall-total {
-  grid-template-columns: minmax(0, 1fr) auto;
   background: #20242a;
   color: #fffefa;
 }
