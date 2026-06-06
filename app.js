@@ -1001,6 +1001,7 @@
       const step = result.curr;
       const targetName = step.target === "zm" ? "真命" : "真正";
       const targetTotal = step.target === "zm" ? step.zm : step.zz;
+      const guidance = targetGuidance(step);
       const title = `${step.g.name}・${STATUS_TEXT[step.status]}`;
       const sub = step.gap > 0
         ? `還差 ${fmt(step.gap)} 到${step.g.name}${targetName}`
@@ -1009,8 +1010,9 @@
         title,
         sub,
         badge: "補額目標",
-        value: `${step.g.name}${targetName}`,
-        note: `${fmt(step.combined || 0)} / ${fmt(targetTotal)}`
+        value: guidance.value,
+        note: `${guidance.note}・${fmt(step.combined || 0)} / ${fmt(targetTotal)}`,
+        guidance
       };
     }
 
@@ -1028,8 +1030,26 @@
       title: "尚未定位",
       sub: "等待隊長單位數",
       badge: "補額目標",
-      value: `${PRIMARY_GATES[0].name}真命`,
-      note: `0萬 / ${fmt(PRIMARY_GATES[0].zhenMingWan)}`
+      value: `剩餘 ${PRIMARY_GATES[0].name.replace("關", "")} ${ZHEN_MING_UNITS} 個`,
+      note: `先達${PRIMARY_GATES[0].name}真命・0萬 / ${fmt(PRIMARY_GATES[0].zhenMingWan)}`
+    };
+  }
+
+  function targetGuidance(step) {
+    const targetName = step.target === "zm" ? "真命" : "真正";
+    const targetProgress = countProgressForWan(step.combined ?? step.tAmt, step.g);
+    const missingUnits = step.target === "zm"
+      ? targetProgress.zhenMing.missing
+      : targetProgress.zhenZheng.missing;
+    const gateName = step.g.name.replace("關", "");
+    return {
+      gateName,
+      targetName,
+      missingUnits,
+      value: `剩餘 ${gateName} ${fmtCount(missingUnits)} 個`,
+      note: `等值 ${fmt(step.gap)}・補到${step.g.name}${targetName}`,
+      action: `補 ${gateName} ${fmtCount(missingUnits)} 個`,
+      direction: `完成${step.g.name}${targetName}後再推進段數`
     };
   }
 
@@ -1049,7 +1069,7 @@
       const className = row.passed
         ? "is-passed"
         : (phase.idx === currentIndex ? "is-current" : "is-waiting");
-      const status = row.passed ? "PASS" : "未 PASS";
+      const status = row.passed ? "PASS" : "再接再厲";
       const missingText = row.passed ? "已達 PASS" : `差 ${fmt(row.missing)}`;
       const progress = Math.round(row.progress * 100);
       const pairText = `${phase.lowerGate.name.replace("關", "")} ${fmt(phase.lowerBase)} × ${phase.lowerCount} + ${phase.upperGate.name.replace("關", "")} ${fmt(phase.upperBase)} × ${phase.upperCount}`;
@@ -1085,7 +1105,7 @@
 
   function phaseFocusText(result) {
     const current = phaseFocusRow(result);
-    if (current) return `${current.phase.name}・${current.passed ? "PASS" : "未 PASS"}`;
+    if (current) return `${current.phase.name}・再接再厲`;
     return "五段數・全部 PASS";
   }
 
@@ -1210,21 +1230,20 @@
   function renderActionList(result) {
     if (!els.actionList) return;
 
-    const focus = result.curr
-      ? `${result.curr.g.name}${result.curr.target === "zm" ? "真命" : "真正"}`
-      : (result.last ? `${result.last.g.name}真正` : `${PRIMARY_GATES[0].name}真命`);
-    const focusSub = result.curr
-      ? `還差 ${fmt(result.curr.gap)}，目前合計 ${fmt(result.curr.combined || 0)}`
-      : (result.last ? "目前沒有待補關卡" : `還差 ${fmt(PRIMARY_GATES[0].zhenMingWan)}，目前合計 0萬`);
     const clearedCount = result.steps.filter((step) => step.status === "cleared" || step.status === "covered").length;
     const nextGate = result.curr?.g || result.last?.g || PRIMARY_GATES[0];
     const countState = gateCountState(result, nextGate);
+    const guidance = result.curr ? targetGuidance(result.curr) : null;
+    const actionValue = guidance ? guidance.action : (result.last ? "目前沒有待補關卡" : `補 ${PRIMARY_GATES[0].name.replace("關", "")} ${ZHEN_MING_UNITS} 個`);
+    const actionSub = guidance
+      ? `${guidance.note}・${guidance.direction}`
+      : (result.last ? "六關皆已補足" : `等值 ${fmt(PRIMARY_GATES[0].zhenMingWan)}，先達個人關真命`);
     const missingText = result.curr
       ? `真命缺 ${fmtCount(countState.zhenMing.missing)}，真正缺 ${fmtCount(countState.zhenZheng.missing)}`
       : (result.last ? "六關真命與真正已補足" : `真命缺 ${ZHEN_MING_UNITS}，真正缺 ${ZHEN_ZHENG_UNITS}`);
 
     els.actionList.innerHTML = [
-      actionCard("下一步行動", focus, focusSub, "primary"),
+      actionCard("下一步行動", actionValue, actionSub, "primary"),
       actionCard("段數 PASS", `${phasePassCount(result)}/${result.phaseRows.length}`, phaseFocusSubText(result), "neutral"),
       actionCard("缺少狀態", nextGate?.name || "—", missingText, "soft")
     ].join("");
