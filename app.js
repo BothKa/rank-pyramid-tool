@@ -1416,18 +1416,24 @@
     if (!els.gateUnitOverview) return;
 
     els.gateUnitOverview.innerHTML = PRIMARY_GATES.map((gate) => {
-      const units = effectiveUnitsForGate(result, gate);
-      const percent = pct(units, TRUE_CLEAR_UNITS);
-      const status = units >= TRUE_CLEAR_UNITS - EPSILON ? "滿單位" : `${percent}%`;
+      const units = rawUnitsForGate(result, gate);
       return `
-        <article class="gate-unit-cell" style="--gate-color: ${gate.col}; --unit-progress: ${percent}%;">
+        <article class="gate-unit-cell" style="--gate-color: ${gate.col};">
           <span>${escapeHtml(gate.name.replace("關", ""))}</span>
-          <strong>${escapeHtml(fmtCount(units))}<small>/13</small></strong>
-          <em>${escapeHtml(status)}</em>
-          <i aria-hidden="true"></i>
+          <strong>${escapeHtml(fmtCount(units))}<small>單位</small></strong>
+          <em>實際單位</em>
         </article>
       `;
     }).join("");
+  }
+
+  function rawUnitsForGate(result, gate) {
+    const directUnits = result.unitAllocation?.rawCounts?.[gate.idx];
+    if (directUnits != null) return Math.max(0, Number(directUnits) || 0);
+
+    const item = ensureUnitCounts(state.leader?.unitCounts, state.leader?.amounts)
+      .find((candidate) => Number(candidate.gateIdx) === gate.idx);
+    return toCount(item?.v);
   }
 
   function effectiveUnitsForGate(result, gate) {

@@ -762,23 +762,6 @@ body[data-view-mode="member"] .team-edit {
   line-height: 1;
 }
 
-.gate-unit-cell i {
-  display: block;
-  height: 5px;
-  border-radius: 999px;
-  background: #edf1ec;
-  overflow: hidden;
-}
-
-.gate-unit-cell i::before {
-  content: "";
-  display: block;
-  width: var(--unit-progress);
-  height: 100%;
-  border-radius: inherit;
-  background: var(--gate-color);
-}
-
 .gate-stepper {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

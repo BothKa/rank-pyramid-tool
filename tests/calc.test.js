@@ -69,6 +69,7 @@ assert.equal(Number(cappedPersonal.rawWan.toFixed(1)), 44);
 assert.equal(Number(cappedPersonal.effectiveWan.toFixed(1)), 28.6);
 
 const familyOnlyThirteen = effectiveUnitAllocation([{ gateIdx: 1, v: "13" }]);
+assert.deepEqual(familyOnlyThirteen.rawCounts.map((count) => Number(count.toFixed(3))), [0, 13, 0, 0, 0, 0]);
 assert.deepEqual(familyOnlyThirteen.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 9.75, 0, 0, 0, 0]);
 assert.equal(Number(familyOnlyThirteen.effectiveWan.toFixed(1)), 114.4);
 
@@ -84,6 +85,7 @@ const downPlacedFamily = effectiveUnitAllocation([
   { gateIdx: 0, v: "5" },
   { gateIdx: 1, v: "20" }
 ]);
+assert.deepEqual(downPlacedFamily.rawCounts.map((count) => Number(count.toFixed(3))), [5, 20, 0, 0, 0, 0]);
 assert.deepEqual(downPlacedFamily.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 13, 0, 0, 0, 0]);
 assert.equal(Number(downPlacedFamily.effectiveWan.toFixed(1)), 143);
 assert.equal(Number(downPlacedFamily.rawWan.toFixed(1)), 187);
