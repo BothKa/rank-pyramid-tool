@@ -474,8 +474,12 @@
     leaderName: document.getElementById("leaderName"),
     leaderAmounts: document.getElementById("leaderAmounts"),
     members: document.getElementById("members"),
+    statusOverview: document.getElementById("statusOverview"),
     summary: document.getElementById("summary"),
     mobileStatus: document.getElementById("mobileStatus"),
+    gateStepper: document.getElementById("gateStepper"),
+    actionList: document.getElementById("actionList"),
+    waterfall: document.getElementById("waterfall"),
     pyramidHeading: document.getElementById("pyramidHeading"),
     pyramid: document.getElementById("pyramid"),
     cycleRows: document.getElementById("cycleRows"),
@@ -547,7 +551,11 @@
   function renderResults() {
     const result = analyze(state);
     document.body.dataset.viewMode = result.settings.viewMode;
+    renderStatusOverview(result);
     renderSummary(result);
+    renderGateStepper(result);
+    renderActionList(result);
+    renderWaterfall(result);
     renderMobileStatus(result);
     renderMemberInlineStatus(result);
     renderPyramid(result);
@@ -700,6 +708,245 @@
     ].join("");
   }
 
+  function renderStatusOverview(result) {
+    if (!els.statusOverview) return;
+
+    if (result.settings.viewMode === "member") {
+      const member = result.selectedMember;
+      const title = member?.gate ? `${member.gate.name}・個人定位` : "尚未定位";
+      const sub = member
+        ? `${member.name || `隊員 ${member.idx + 1}`} 最高金額 ${member.wan > 0 ? fmt(member.wan) : "—"}`
+        : "請先新增隊員金額";
+      const gap = member?.cycle ? cycleGapText(member.cycle) : "—";
+
+      els.statusOverview.innerHTML = `
+        <div class="status-copy">
+          <span class="status-kicker">目前狀態</span>
+          <h2>${escapeHtml(title)}</h2>
+          <p>${escapeHtml(sub)}</p>
+        </div>
+        <div class="status-focus">
+          <span>下一步</span>
+          <strong>${escapeHtml(gap)}</strong>
+          <small>${escapeHtml(member?.cycle ? cycleMainText(member.cycle) : "個別輪迴")}</small>
+        </div>
+      `;
+      return;
+    }
+
+    const focus = leaderFocus(result);
+    const cleared = result.steps
+      .filter((step) => step.status === "cleared" || step.status === "covered")
+      .map((step) => step.g.name);
+    const clearedText = cleared.length > 0 ? cleared.join("、") : "尚未真正過關";
+    const shiText = result.shi ? result.shi.name : "—";
+
+    els.statusOverview.innerHTML = `
+      <div class="status-copy">
+        <span class="status-kicker">目前狀態</span>
+        <h2>${escapeHtml(focus.title)}</h2>
+        <p>${escapeHtml(focus.sub)}</p>
+      </div>
+      <div class="status-focus">
+        <span>${escapeHtml(focus.badge)}</span>
+        <strong>${escapeHtml(focus.value)}</strong>
+        <small>${escapeHtml(focus.note)}</small>
+      </div>
+      <div class="status-mini">
+        <span>已真正過關</span>
+        <strong>${escapeHtml(clearedText)}</strong>
+      </div>
+      <div class="status-mini">
+        <span>實得上限</span>
+        <strong>${escapeHtml(shiText)}</strong>
+      </div>
+    `;
+  }
+
+  function leaderFocus(result) {
+    if (result.curr) {
+      const step = result.curr;
+      const targetName = step.target === "zm" ? "真命" : "真正";
+      const targetTotal = step.target === "zm" ? step.zm : step.zz;
+      const title = `${step.g.name}・${STATUS_TEXT[step.status]}`;
+      const sub = step.gap > 0
+        ? `還差 ${fmt(step.gap)} 到${step.g.name}${targetName}`
+        : `已達${step.g.name}${targetName}`;
+      return {
+        title,
+        sub,
+        badge: "補額目標",
+        value: `${step.g.name}${targetName}`,
+        note: `${fmt(step.combined || 0)} / ${fmt(targetTotal)}`
+      };
+    }
+
+    if (result.last) {
+      return {
+        title: `${result.last.g.name}・真正過關`,
+        sub: "目前可計算關卡已補足",
+        badge: "剩餘",
+        value: fmt(result.last.rem),
+        note: "可往下一階段延伸"
+      };
+    }
+
+    return {
+      title: "尚未定位",
+      sub: "請輸入隊長金額或隊員金額",
+      badge: "補額目標",
+      value: "—",
+      note: "等待輸入"
+    };
+  }
+
+  function renderGateStepper(result) {
+    if (!els.gateStepper) return;
+    const isMemberView = result.settings.viewMode === "member";
+    const selectedIdx = isMemberView && result.selectedMember?.gate ? result.selectedMember.gate.idx : -1;
+
+    els.gateStepper.innerHTML = GATES.map((gate) => {
+      const state = isMemberView
+        ? memberGateState(gate, selectedIdx)
+        : leaderGateState(result, gate);
+      return `
+        <article class="gate-step ${state.className}" style="--gate-color: ${gate.col}; --zm: ${state.zmPct}%; --zz: ${state.zzPct}%;">
+          <div class="gate-step-head">
+            <span>${gate.idx + 1}</span>
+            <strong>${escapeHtml(gate.name)}</strong>
+          </div>
+          <small>${escapeHtml(fmt(gate.base))}</small>
+          <div class="gate-bars" aria-hidden="true">
+            <i class="bar-zm"></i>
+            <i class="bar-zz"></i>
+          </div>
+          <div class="gate-step-meta">
+            <span>真命 ${escapeHtml(fmt(gate.base * 3))}</span>
+            <span>真正 ${escapeHtml(fmt(gate.base * 13))}</span>
+          </div>
+          <b>${escapeHtml(state.label)}</b>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function leaderGateState(result, gate) {
+    const step = result.steps.find((item) => item.g.idx === gate.idx);
+    if (!step) {
+      return { className: "is-locked", label: "未開始", zmPct: 0, zzPct: 0 };
+    }
+
+    const achieved = step.status === "covered" || step.status === "cleared"
+      ? step.zz
+      : (step.combined ?? step.tAmt);
+    const zmPct = pct(achieved, step.zm);
+    const zzPct = pct(achieved, step.zz);
+    const labels = {
+      covered: "團隊真正覆蓋",
+      cleared: "真正過關",
+      at_zm: "真命過關",
+      wip: "真命前進中"
+    };
+
+    return {
+      className: `is-${step.status}`,
+      label: labels[step.status] || "進行中",
+      zmPct,
+      zzPct
+    };
+  }
+
+  function memberGateState(gate, selectedIdx) {
+    if (selectedIdx < 0) return { className: "is-locked", label: "未觸及", zmPct: 0, zzPct: 0 };
+    if (gate.idx < selectedIdx) return { className: "is-cleared", label: "已觸及", zmPct: 100, zzPct: 100 };
+    if (gate.idx === selectedIdx) return { className: "is-personal", label: "我的位置", zmPct: 100, zzPct: 0 };
+    return { className: "is-locked", label: "未觸及", zmPct: 0, zzPct: 0 };
+  }
+
+  function renderActionList(result) {
+    if (!els.actionList) return;
+
+    if (result.settings.viewMode === "member") {
+      const member = result.selectedMember;
+      els.actionList.innerHTML = [
+        actionCard("個人定位", member?.gate?.name || "尚未定位", member?.wan > 0 ? `最高金額 ${fmt(member.wan)}` : "請輸入金額", "primary"),
+        actionCard("個別輪迴", cycleMainText(member?.cycle), member?.cycle ? cycleSubText(member.cycle) : "尚未定位", "neutral"),
+        actionCard("下一步", member?.cycle ? cycleGapText(member.cycle) : "—", "隊員視角只看個人狀態", "soft")
+      ].join("");
+      return;
+    }
+
+    const focus = result.curr
+      ? `${result.curr.g.name}${result.curr.target === "zm" ? "真命" : "真正"}`
+      : (result.last ? `${result.last.g.name}真正` : "尚未定位");
+    const focusSub = result.curr
+      ? `還差 ${fmt(result.curr.gap)}，目前合計 ${fmt(result.curr.combined || 0)}`
+      : "目前沒有待補關卡";
+    const teamMode = result.settings.teamCycleBasis === "amount" ? "團隊金額" : "團隊配置";
+    const teamSub = result.settings.teamCycleBasis === "amount"
+      ? `${fmt(result.teamWan)}・${cycleSubText(result.teamCycle)}`
+      : coverageMissingText(result.teamCycle);
+    const shiSub = result.teamHighIdx >= 0
+      ? `隊員最高關卡 +2，目前最高到 ${result.shi?.name || "—"}`
+      : "沒有隊員上限，先得即為實得";
+
+    els.actionList.innerHTML = [
+      actionCard("先得後修", focus, focusSub, "primary"),
+      actionCard(teamMode, cycleMainText(result.teamCycle), teamSub, "neutral"),
+      actionCard("實得實修", result.shi?.name || "—", shiSub, "soft")
+    ].join("");
+  }
+
+  function actionCard(label, value, sub, tone) {
+    return `
+      <div class="action-card tone-${tone}">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value || "—")}</strong>
+        <small>${escapeHtml(sub || "")}</small>
+      </div>
+    `;
+  }
+
+  function renderWaterfall(result) {
+    if (!els.waterfall) return;
+    if (result.steps.length === 0) {
+      els.waterfall.innerHTML = `<div class="empty-card">尚未有補額流程</div>`;
+      return;
+    }
+
+    const max = Math.max(result.leaderWan, ...result.steps.map((step) => step.targetNeed || step.need || 0), 1);
+    const rows = result.steps.map((step) => {
+      const targetName = step.target === "zm" ? "真命" : "真正";
+      const need = step.status === "covered" ? 0 : (step.targetNeed ?? step.need ?? 0);
+      const paid = step.status === "covered" ? 0 : Math.min(step.rem + (step.status === "cleared" ? need : 0), need);
+      const bar = pct(need, max);
+      const remText = step.status === "wip" || step.status === "at_zm"
+        ? `剩 ${fmt(step.rem)}・差 ${fmt(step.gap)}`
+        : `剩 ${fmt(step.rem)}`;
+      const status = STATUS_TEXT[step.status] || "進行中";
+
+      return `
+        <div class="waterfall-row is-${step.status}" style="--flow: ${bar}%;">
+          <div>
+            <strong>${escapeHtml(step.g.name)}</strong>
+            <small>${escapeHtml(status)}・${escapeHtml(step.status === "covered" ? "團隊已覆蓋" : `${targetName}補額 ${fmt(need)}`)}</small>
+          </div>
+          <div class="flow-bar"><i></i></div>
+          <span>${escapeHtml(step.status === "covered" ? "0萬" : fmt(paid))}</span>
+          <em>${escapeHtml(remText)}</em>
+        </div>
+      `;
+    }).join("");
+
+    els.waterfall.innerHTML = `
+      <div class="waterfall-total">
+        <span>起始隊長總額</span>
+        <strong>${escapeHtml(fmt(result.leaderWan))}</strong>
+      </div>
+      ${rows}
+    `;
+  }
+
   function renderMobileStatus(result) {
     if (!els.mobileStatus) return;
     els.mobileStatus.dataset.viewMode = result.settings.viewMode;
@@ -764,6 +1011,11 @@
 
   function metric(label, value, sub) {
     return `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(sub)}</small></div>`;
+  }
+
+  function pct(value, total) {
+    if (!total || total <= 0) return 0;
+    return Math.round(Math.max(0, Math.min(1, value / total)) * 100);
   }
 
   function renderPyramid(result) {
