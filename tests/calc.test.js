@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const core = require("../app.js");
 
-const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, CYCLES, gateFor, GATES, maxWanOf, teamTierFor, toWan } = core;
+const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, CYCLES, gateFor, GATES, PRIMARY_GATES, leaderTotalWanFromUnitCounts, maxWanOf, teamTierFor, toWan, unitCountsFromWan } = core;
 
 function state(leaderAmount, memberAmounts = []) {
   return {
@@ -34,6 +34,18 @@ assert.equal(toWan("1億2000"), 12000);
 assert.equal(toWan("100000000元"), 10000);
 assert.equal(toWan("22000萬"), 22000);
 assert.equal(toWan("-1"), 0);
+
+assert.deepEqual(PRIMARY_GATES.map((gate) => gate.name), ["個人關", "家庭關", "事業關", "社會關", "國家關"]);
+assert.equal(leaderTotalWanFromUnitCounts([
+  { gateIdx: 0, v: "13" },
+  { gateIdx: 1, v: "13" },
+  { gateIdx: 2, v: "13" },
+  { gateIdx: 3, v: "2.625" },
+  { gateIdx: 4, v: "" }
+]), 660);
+const unitCounts660 = unitCountsFromWan(660);
+assert.deepEqual(unitCounts660.map((item) => item.v), ["13", "13", "13", "2.625", ""]);
+assert.equal(Number(leaderTotalWanFromUnitCounts(unitCounts660).toFixed(1)), 660);
 
 assert.equal(gateFor(2.2).name, "個人關");
 assert.equal(gateFor(87).name, "事業關");
@@ -112,6 +124,10 @@ assert.equal(exactZhenMing.xian.name, "家庭關");
 const noTeam = analyze(state(880, []));
 assert.equal(noTeam.teamHighIdx, -1);
 assert.equal(noTeam.shi.name, noTeam.xian.name);
+
+const primaryOnlyHuge = analyze({ ...state(10000, []), primaryOnly: true });
+assert.equal(primaryOnlyHuge.xian.name, "國家關");
+assert.equal(primaryOnlyHuge.curr, undefined);
 
 const memberHighestOnly = calcCascade([{ v: "28.6" }], [
   { amounts: [{ v: "2.2" }, { v: "8.8" }] }

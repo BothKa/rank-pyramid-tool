@@ -73,6 +73,8 @@
   const ZHEN_MING_UNITS = 3;
   const ZHEN_ZHENG_UNITS = 13;
   const EPSILON = 1e-9;
+  const PRIMARY_GATE_COUNT = 5;
+  const PRIMARY_GATES = GATES.slice(0, PRIMARY_GATE_COUNT);
 
   const DEFAULT_SETTINGS = {
     viewMode: "leader",
@@ -85,13 +87,20 @@
     settings: { ...DEFAULT_SETTINGS, selectedMemberId: 1 },
     leader: {
       name: "隊長",
-      amounts: [{ id: 1, v: "880" }]
+      unitCounts: PRIMARY_GATES.map((gate) => ({ gateIdx: gate.idx, v: "" })),
+      amounts: [{ id: 1, v: "" }]
     },
-    members: [
-      { id: 1, name: "隊員 1", amounts: [{ id: 1, v: "2.2" }] },
-      { id: 2, name: "隊員 2", amounts: [{ id: 1, v: "2.2" }] },
-      { id: 3, name: "隊員 3", amounts: [{ id: 1, v: "2.2" }] }
-    ]
+    members: []
+  };
+
+  const EXAMPLE_STATE = {
+    settings: { ...DEFAULT_SETTINGS, selectedMemberId: null },
+    leader: {
+      name: "隊長",
+      unitCounts: unitCountsFromWan(660),
+      amounts: [{ id: 1, v: "660" }]
+    },
+    members: []
   };
 
   const STORAGE_KEY = "rank-pyramid-v1";
@@ -108,6 +117,14 @@
       return amountTextToWan(text);
     }
 
+    const n = Number(text);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return n;
+  }
+
+  function toCount(raw) {
+    const text = normalizeAmountText(raw);
+    if (!text) return 0;
     const n = Number(text);
     if (!Number.isFinite(n) || n <= 0) return 0;
     return n;
@@ -170,6 +187,49 @@
 
   function sumWanOf(amounts) {
     return amounts.reduce((sum, amount) => sum + toWan(amount.v), 0);
+  }
+
+  function leaderTotalWanFromUnitCounts(unitCounts) {
+    return ensureUnitCounts(unitCounts).reduce((sum, item) => {
+      const gate = GATES.find((candidate) => candidate.idx === Number(item.gateIdx));
+      if (!gate) return sum;
+      return sum + toCount(item.v) * gate.base;
+    }, 0);
+  }
+
+  function unitCountsFromWan(wan) {
+    let remaining = Math.max(0, Number(wan) || 0);
+    return PRIMARY_GATES.map((gate, index) => {
+      const isLastGate = index === PRIMARY_GATES.length - 1;
+      const units = isLastGate
+        ? remaining / gate.base
+        : Math.min(ZHEN_ZHENG_UNITS, remaining / gate.base);
+      remaining = Math.max(0, remaining - units * gate.base);
+      return {
+        gateIdx: gate.idx,
+        v: units > EPSILON ? fmtUnitInput(units) : ""
+      };
+    });
+  }
+
+  function ensureUnitCounts(unitCounts, fallbackAmounts) {
+    if (!Array.isArray(unitCounts) || unitCounts.length === 0) {
+      return unitCountsFromWan(sumWanOf(ensureAmounts(fallbackAmounts)));
+    }
+
+    const byGate = new Map(unitCounts.map((item) => [Number(item.gateIdx), item]));
+    return PRIMARY_GATES.map((gate) => {
+      const item = byGate.get(gate.idx);
+      return {
+        gateIdx: gate.idx,
+        v: item?.v ?? ""
+      };
+    });
+  }
+
+  function leaderAmountsFromUnitCounts(unitCounts) {
+    const total = leaderTotalWanFromUnitCounts(unitCounts);
+    return [{ id: "leader-unit-total", v: total > EPSILON ? String(total) : "" }];
   }
 
   function atLeast(value, target) {
@@ -357,7 +417,7 @@
     return counts;
   }
 
-  function calcCascade(leaderAmts, members) {
+  function calcCascade(leaderAmts, members, gates = GATES) {
     const leaderWan = sumWanOf(leaderAmts);
     if (leaderWan <= 0) return { steps: [], leaderWan: 0, tc: {} };
 
@@ -365,7 +425,7 @@
     let rem = leaderWan;
     const steps = [];
 
-    for (const gate of GATES) {
+    for (const gate of gates) {
       const cnt = tc[gate.name] || 0;
       const tAmt = cnt * gate.base;
       const zz = gate.base * 13;
@@ -412,10 +472,11 @@
     return { steps, last, curr, leaderWan, tc };
   }
 
-  function xianGate(last, curr) {
+  function xianGate(last, curr, gates = GATES) {
     if (!curr) return last ? last.g : null;
     if (curr.status === "at_zm") {
-      return GATES[Math.min(curr.g.idx + 1, GATES.length - 1)];
+      const currentIndex = gates.findIndex((gate) => gate.idx === curr.g.idx);
+      return gates[Math.min(Math.max(0, currentIndex + 1), gates.length - 1)];
     }
     return curr.g;
   }
@@ -427,12 +488,12 @@
     }, -1);
   }
 
-  function shiGate(xian, teamHighIdx) {
+  function shiGate(xian, teamHighIdx, gates = GATES) {
     if (!xian) return null;
     if (teamHighIdx < 0) return xian;
-    const cap = Math.min(teamHighIdx + 2, GATES.length - 1);
+    const cap = Math.min(teamHighIdx + 2, gates.at(-1)?.idx ?? GATES.length - 1);
     const real = Math.min(xian.idx, cap);
-    return real >= 0 ? GATES[real] : null;
+    return real >= 0 ? (gates.find((gate) => gate.idx === real) || GATES[real] || null) : null;
   }
 
   function zone(gIdx, shiIdx, xianIdx) {
@@ -444,7 +505,8 @@
   function analyze(state) {
     const members = state.members || [];
     const settings = normalizeSettings(state.settings, members);
-    const cascade = calcCascade(state.leader.amounts || [], members);
+    const activeGates = state.primaryOnly ? PRIMARY_GATES : GATES;
+    const cascade = calcCascade(state.leader.amounts || [], members, activeGates);
     const positions = memberPositions(members);
     const effectiveCount = positions.filter((member) => member.wan > 0).length;
     const teamTier = teamTierFor(effectiveCount);
@@ -452,9 +514,9 @@
     const leaderCycleWan = settings.leaderCycleBasis === "max"
       ? maxWanOf(state.leader.amounts || [])
       : cascade.leaderWan;
-    const xian = xianGate(cascade.last, cascade.curr);
+    const xian = xianGate(cascade.last, cascade.curr, activeGates);
     const highIdx = teamHighGateIdx(positions);
-    const shi = shiGate(xian, highIdx);
+    const shi = shiGate(xian, highIdx, activeGates);
     const leaderCycle = cycleStatusFor(leaderCycleWan);
     const teamAmountCycle = cycleStatusFor(teamWan);
     const teamCoverageCycle = cycleStatusForTeamCoverage(positions);
@@ -512,6 +574,7 @@
 
   const core = {
     GATES,
+    PRIMARY_GATES,
     CYCLES,
     TEAM_TIERS,
     STATUS_TEXT,
@@ -520,10 +583,15 @@
     DEFAULT_STATE,
     DEFAULT_SETTINGS,
     toWan,
+    toCount,
     gateFor,
     teamTierFor,
     maxWanOf,
     sumWanOf,
+    ensureUnitCounts,
+    leaderTotalWanFromUnitCounts,
+    unitCountsFromWan,
+    leaderAmountsFromUnitCounts,
     countProgressForUnits,
     countProgressForWan,
     cycleProgressAt,
@@ -558,6 +626,7 @@
     form: document.getElementById("rankForm"),
     viewerMember: document.getElementById("viewerMember"),
     leaderName: document.getElementById("leaderName"),
+    leaderUnitCounts: document.getElementById("leaderUnitCounts"),
     leaderAmounts: document.getElementById("leaderAmounts"),
     members: document.getElementById("members"),
     statusOverview: document.getElementById("statusOverview"),
@@ -596,6 +665,8 @@
     clean.leader = clean.leader || cloneState(DEFAULT_STATE.leader);
     clean.leader.name = clean.leader.name || "隊長";
     clean.leader.amounts = ensureAmounts(clean.leader.amounts);
+    clean.leader.unitCounts = ensureUnitCounts(clean.leader.unitCounts, clean.leader.amounts);
+    clean.leader.amounts = leaderAmountsFromUnitCounts(clean.leader.unitCounts);
     clean.members = (clean.members || []).slice(0, 13).map((member, index) => ({
       id: member.id || Date.now() + index,
       name: member.name || `隊員 ${index + 1}`,
@@ -635,7 +706,7 @@
   }
 
   function renderResults() {
-    const result = analyze(state);
+    const result = analyze(currentAnalysisState());
     document.body.dataset.viewMode = result.settings.viewMode;
     renderStatusOverview(result);
     renderSummary(result);
@@ -650,12 +721,27 @@
     renderMembers(result);
   }
 
+  function currentAnalysisState() {
+    const next = normalizeState(state);
+    next.primaryOnly = true;
+    next.members = [];
+    next.settings = {
+      ...normalizeSettings(next.settings, []),
+      viewMode: "leader",
+      leaderCycleBasis: "sum",
+      teamCycleBasis: "amount",
+      selectedMemberId: null
+    };
+    next.leader.amounts = leaderAmountsFromUnitCounts(next.leader.unitCounts);
+    return next;
+  }
+
   function renderInputs() {
     renderSettingsControls();
     if (document.activeElement !== els.leaderName) {
       els.leaderName.value = state.leader.name;
     }
-    renderAmountList(els.leaderAmounts, state.leader.amounts, "leader");
+    renderLeaderUnitCounts();
     renderMemberList();
   }
 
@@ -676,6 +762,48 @@
         els.viewerMember.append(option);
       });
       els.viewerMember.disabled = state.members.length === 0;
+    }
+  }
+
+  function renderLeaderUnitCounts() {
+    if (!els.leaderUnitCounts) return;
+    state.leader.unitCounts = ensureUnitCounts(state.leader.unitCounts, state.leader.amounts);
+
+    const active = document.activeElement;
+    const activeKey = active?.dataset?.key;
+    els.leaderUnitCounts.replaceChildren();
+
+    state.leader.unitCounts.forEach((item) => {
+      const gate = GATES.find((candidate) => candidate.idx === Number(item.gateIdx));
+      if (!gate) return;
+
+      const label = document.createElement("label");
+      const key = `leader-unit-${gate.idx}`;
+      label.className = "unit-count-field";
+      label.innerHTML = `
+        <span>${escapeHtml(gate.name.replace("關", ""))}</span>
+        <small>${escapeHtml(fmt(gate.base))} / 單位</small>
+      `;
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.inputMode = "decimal";
+      input.placeholder = "0";
+      input.value = item.v;
+      input.dataset.key = key;
+      input.dataset.leaderUnit = String(gate.idx);
+      input.setAttribute("aria-label", `${gate.name}${fmt(gate.base)}單位數`);
+
+      label.append(input);
+      els.leaderUnitCounts.append(label);
+    });
+
+    if (activeKey) {
+      const restored = els.leaderUnitCounts.querySelector(`input[data-key="${cssEscape(activeKey)}"]`);
+      if (restored) {
+        restored.focus();
+        setCursorToEnd(restored);
+      }
     }
   }
 
@@ -750,27 +878,19 @@
   }
 
   function renderSummary(result) {
-    if (result.settings.viewMode === "member") {
-      renderMemberSummary(result);
-      return;
-    }
-
-    const xianText = result.xian ? result.xian.name : "—";
-    const shiText = result.shi ? result.shi.name : "—";
-    const teamText = result.teamTier ? `${result.teamTier.label} ${result.teamTier.desc}` : "—";
-    const progress = result.xianInProgress ? "前進中" : "已達真命";
-    const personalText = result.leaderPersonalGate ? result.leaderPersonalGate.name : "—";
-    const leaderBasis = result.settings.leaderCycleBasis === "max" ? "最高單筆" : `${state.leader.amounts.length} 筆加總`;
-    const teamBasis = result.settings.teamCycleBasis === "amount" ? `${fmt(result.teamWan)}・金額加總` : "13/3 配置";
+    const focus = leaderFocus(result);
+    const clearedCount = result.steps.filter((step) => step.status === "cleared" || step.status === "covered").length;
+    const hasStarted = Boolean(result.curr || result.last);
+    const targetText = result.curr
+      ? `${result.curr.g.name}${result.curr.target === "zm" ? "真命" : "真正"}`
+      : (result.last ? `${result.last.g.name}真正` : `${PRIMARY_GATES[0].name}真命`);
+    const gapText = result.curr ? fmt(result.curr.gap) : (result.last ? "0萬" : fmt(PRIMARY_GATES[0].zhenMingWan));
 
     els.summary.innerHTML = [
-      metric("隊長總額", fmt(result.leaderWan), `${state.leader.amounts.length} 筆加總`),
-      metric("隊長個人", personalText, result.leaderPersonalGate ? "個人最高金額定位" : "尚無有效金額"),
-      metric("自己輪迴", cycleMainText(result.leaderCycle), `${leaderBasis}・${cycleSubText(result.leaderCycle)}`),
-      metric("團隊輪迴", cycleMainText(result.teamCycle), `${teamBasis}・${cycleSubText(result.teamCycle)}`),
-      metric("先得後修", xianText, result.xian ? progress : "尚未定位"),
-      metric("實得實修", shiText, result.teamHighIdx >= 0 ? `隊員最高 +2 上限` : "無隊員限制"),
-      metric("有效隊員", `${result.effectiveCount} 人`, teamText)
+      metric("隊長總額", fmt(result.leaderWan), "五單位加總"),
+      metric("目前狀態", focus.title, focus.sub),
+      metric("下一目標", targetText, hasStarted && !result.curr ? "五關已補足" : `缺 ${gapText}`),
+      metric("真正過關", `${clearedCount}/${PRIMARY_GATES.length} 關`, clearedGateText(result))
     ].join("");
   }
 
@@ -797,35 +917,8 @@
   function renderStatusOverview(result) {
     if (!els.statusOverview) return;
 
-    if (result.settings.viewMode === "member") {
-      const member = result.selectedMember;
-      const title = member?.gate ? `${member.gate.name}・個人定位` : "尚未定位";
-      const sub = member
-        ? `${member.name || `隊員 ${member.idx + 1}`} 最高金額 ${member.wan > 0 ? fmt(member.wan) : "—"}`
-        : "請先新增隊員金額";
-      const gap = member?.cycle ? cycleGapText(member.cycle) : "—";
-
-      els.statusOverview.innerHTML = `
-        <div class="status-copy">
-          <span class="status-kicker">目前狀態</span>
-          <h2>${escapeHtml(title)}</h2>
-          <p>${escapeHtml(sub)}</p>
-        </div>
-        <div class="status-focus">
-          <span>下一步</span>
-          <strong>${escapeHtml(gap)}</strong>
-          <small>${escapeHtml(member?.cycle ? cycleMainText(member.cycle) : "個別輪迴")}</small>
-        </div>
-      `;
-      return;
-    }
-
     const focus = leaderFocus(result);
-    const cleared = result.steps
-      .filter((step) => step.status === "cleared" || step.status === "covered")
-      .map((step) => step.g.name);
-    const clearedText = cleared.length > 0 ? cleared.join("、") : "尚未真正過關";
-    const shiText = result.shi ? result.shi.name : "—";
+    const clearedText = clearedGateText(result);
 
     els.statusOverview.innerHTML = `
       <div class="status-copy">
@@ -841,10 +934,6 @@
       <div class="status-mini">
         <span>已真正過關</span>
         <strong>${escapeHtml(clearedText)}</strong>
-      </div>
-      <div class="status-mini">
-        <span>實得上限</span>
-        <strong>${escapeHtml(shiText)}</strong>
       </div>
     `;
   }
@@ -870,28 +959,35 @@
     if (result.last) {
       return {
         title: `${result.last.g.name}・真正過關`,
-        sub: "目前可計算關卡已補足",
-        badge: "剩餘",
+        sub: "五大關卡已補足",
+        badge: "五關後餘額",
         value: fmt(result.last.rem),
-        note: "可往下一階段延伸"
+        note: "保留後續使用"
       };
     }
 
     return {
       title: "尚未定位",
-      sub: "請輸入隊長金額或隊員金額",
+      sub: "等待隊長單位數",
       badge: "補額目標",
-      value: "—",
-      note: "等待輸入"
+      value: `${PRIMARY_GATES[0].name}真命`,
+      note: `0萬 / ${fmt(PRIMARY_GATES[0].zhenMingWan)}`
     };
+  }
+
+  function clearedGateText(result) {
+    const cleared = result.steps
+      .filter((step) => step.status === "cleared" || step.status === "covered")
+      .map((step) => step.g.name);
+    return cleared.length > 0 ? cleared.join("、") : "尚未真正過關";
   }
 
   function renderGateStepper(result) {
     if (!els.gateStepper) return;
-    const isMemberView = result.settings.viewMode === "member";
+    const isMemberView = false;
     const selectedIdx = isMemberView && result.selectedMember?.gate ? result.selectedMember.gate.idx : -1;
 
-    els.gateStepper.innerHTML = GATES.map((gate) => {
+    els.gateStepper.innerHTML = PRIMARY_GATES.map((gate) => {
       const state = isMemberView
         ? memberGateState(gate, selectedIdx)
         : leaderGateState(result, gate);
@@ -983,6 +1079,13 @@
     return String(parseFloat(n.toFixed(2)));
   }
 
+  function fmtUnitInput(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return "";
+    if (Math.abs(n - Math.round(n)) < 0.001) return String(Math.round(n));
+    return String(parseFloat(n.toFixed(3)));
+  }
+
   function memberGateState(gate, selectedIdx) {
     if (selectedIdx < 0) return { className: "is-locked", label: "未觸及", zmPct: 0, zzPct: 0 };
     if (gate.idx < selectedIdx) return { className: "is-cleared", label: "已觸及", zmPct: 100, zzPct: 100 };
@@ -993,34 +1096,23 @@
   function renderActionList(result) {
     if (!els.actionList) return;
 
-    if (result.settings.viewMode === "member") {
-      const member = result.selectedMember;
-      els.actionList.innerHTML = [
-        actionCard("個人定位", member?.gate?.name || "尚未定位", member?.wan > 0 ? `最高金額 ${fmt(member.wan)}` : "請輸入金額", "primary"),
-        actionCard("個別輪迴", cycleMainText(member?.cycle), member?.cycle ? cycleSubText(member.cycle) : "尚未定位", "neutral"),
-        actionCard("下一步", member?.cycle ? cycleGapText(member.cycle) : "—", "隊員視角只看個人狀態", "soft")
-      ].join("");
-      return;
-    }
-
     const focus = result.curr
       ? `${result.curr.g.name}${result.curr.target === "zm" ? "真命" : "真正"}`
-      : (result.last ? `${result.last.g.name}真正` : "尚未定位");
+      : (result.last ? `${result.last.g.name}真正` : `${PRIMARY_GATES[0].name}真命`);
     const focusSub = result.curr
       ? `還差 ${fmt(result.curr.gap)}，目前合計 ${fmt(result.curr.combined || 0)}`
-      : "目前沒有待補關卡";
-    const teamMode = result.settings.teamCycleBasis === "amount" ? "團隊金額" : "團隊配置";
-    const teamSub = result.settings.teamCycleBasis === "amount"
-      ? `${fmt(result.teamWan)}・${cycleSubText(result.teamCycle)}`
-      : coverageMissingText(result.teamCycle);
-    const shiSub = result.teamHighIdx >= 0
-      ? `隊員最高關卡 +2，目前最高到 ${result.shi?.name || "—"}`
-      : "沒有隊員上限，先得即為實得";
+      : (result.last ? "目前沒有待補關卡" : `還差 ${fmt(PRIMARY_GATES[0].zhenMingWan)}，目前合計 0萬`);
+    const clearedCount = result.steps.filter((step) => step.status === "cleared" || step.status === "covered").length;
+    const nextGate = result.curr?.g || result.last?.g || PRIMARY_GATES[0];
+    const countState = gateCountState(result, nextGate);
+    const missingText = result.curr
+      ? `真命缺 ${fmtCount(countState.zhenMing.missing)}，真正缺 ${fmtCount(countState.zhenZheng.missing)}`
+      : (result.last ? "五關真命與真正已補足" : `真命缺 ${ZHEN_MING_UNITS}，真正缺 ${ZHEN_ZHENG_UNITS}`);
 
     els.actionList.innerHTML = [
       actionCard("先得後修", focus, focusSub, "primary"),
-      actionCard(teamMode, cycleMainText(result.teamCycle), teamSub, "neutral"),
-      actionCard("實得實修", result.shi?.name || "—", shiSub, "soft")
+      actionCard("五關主軸", "個人 / 家庭 / 事業 / 社會 / 國家", `真正過關 ${clearedCount}/${PRIMARY_GATES.length}`, "neutral"),
+      actionCard("缺少狀態", nextGate?.name || "—", missingText, "soft")
     ].join("");
   }
 
@@ -1077,28 +1169,15 @@
   function renderMobileStatus(result) {
     if (!els.mobileStatus) return;
     els.mobileStatus.dataset.viewMode = result.settings.viewMode;
-
-    if (result.settings.viewMode === "member") {
-      const member = result.selectedMember;
-      els.mobileStatus.innerHTML = `
-        ${mobileStat("隊員", member?.name || "—", member ? `#${member.idx + 1}` : "尚無")}
-        ${mobileStat("位置", member?.gate?.name || "—", member?.wan > 0 ? fmt(member.wan) : "尚未")}
-        ${mobileStat("輪迴", cycleMainText(member?.cycle), cycleSubText(member?.cycle))}
-        ${mobileStat("差額", member?.cycle ? cycleGapText(member.cycle) : "—", "個別")}
-      `;
-      return;
-    }
-
-    const shiText = result.shi ? result.shi.name : "—";
-    const personalText = result.leaderPersonalGate ? result.leaderPersonalGate.name : "—";
-    const teamSub = result.settings.teamCycleBasis === "amount" ? fmt(result.teamWan) : "13/3配置";
+    const focus = leaderFocus(result);
+    const clearedCount = result.steps.filter((step) => step.status === "cleared" || step.status === "covered").length;
+    const gap = result.curr ? fmt(result.curr.gap) : (result.last ? "0萬" : fmt(PRIMARY_GATES[0].zhenMingWan));
 
     els.mobileStatus.innerHTML = `
-      ${mobileStat("個人", personalText, "個人定位")}
-      ${mobileStat("自己", cycleMainText(result.leaderCycle), cycleSubText(result.leaderCycle))}
-      ${mobileStat("團隊", cycleMainText(result.teamCycle), teamSub)}
-      ${mobileStat("實得", shiText, result.teamHighIdx >= 0 ? "隊員 +2" : "無限制")}
-      <button class="mobile-status-action" data-action="jump-pyramid" type="button">看圖</button>
+      ${mobileStat("總額", fmt(result.leaderWan), "五單位")}
+      ${mobileStat("狀態", focus.value, focus.badge)}
+      ${mobileStat("缺口", gap, result.curr ? "下一目標" : "已補足")}
+      ${mobileStat("真正", `${clearedCount}/${PRIMARY_GATES.length}`, "五關")}
     `;
   }
 
@@ -1499,6 +1578,17 @@
 
     if (target.tagName !== "INPUT") return;
 
+    if (target.matches("[data-leader-unit]")) {
+      state.leader.unitCounts = ensureUnitCounts(state.leader.unitCounts, state.leader.amounts);
+      const item = state.leader.unitCounts.find((unit) => String(unit.gateIdx) === String(target.dataset.leaderUnit));
+      if (item) {
+        item.v = target.value;
+        state.leader.amounts = leaderAmountsFromUnitCounts(state.leader.unitCounts);
+        scheduleRender();
+      }
+      return;
+    }
+
     if (target.classList.contains("amount-input")) {
       const amount = findAmount(target.dataset.scope, target.dataset.amountId, target.dataset.memberId);
       if (amount) {
@@ -1559,7 +1649,7 @@
   });
 
   els.resetExample.addEventListener("click", () => {
-    state = cloneState(DEFAULT_STATE);
+    state = cloneState(EXAMPLE_STATE);
     scheduleRender({ inputs: true });
   });
 

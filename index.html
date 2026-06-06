@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>階級三角形定位系統</title>
-    <link rel="stylesheet" href="./styles.css?v=20260606-count-status" />
+    <title>五大關卡定位系統</title>
+    <link rel="stylesheet" href="./styles.css?v=20260606-five-gates" />
   </head>
   <body>
     <main class="app-shell">
@@ -12,14 +12,14 @@
         <aside class="input-panel">
           <div class="panel-head">
             <div>
-              <p class="eyebrow">十大關卡</p>
-              <h1>階級三角形</h1>
+              <p class="eyebrow">五大關卡</p>
+              <h1>關卡階梯</h1>
             </div>
             <button class="ghost-button" id="resetExample" type="button">範例</button>
           </div>
 
           <form id="rankForm" autocomplete="off">
-            <section class="form-section control-panel" aria-labelledby="settingsHeading">
+            <section class="form-section control-panel" aria-labelledby="settingsHeading" hidden>
               <div class="section-title plain">
                 <h2 id="settingsHeading">檢視</h2>
               </div>
@@ -77,18 +77,18 @@
             <section class="form-section leader-edit" aria-labelledby="leaderHeading">
               <div class="section-title">
                 <h2 id="leaderHeading">隊長</h2>
-                <button class="icon-button" data-action="add-leader-amount" type="button" title="新增隊長金額" aria-label="新增隊長金額">+</button>
               </div>
               <label class="field-label">
                 <span>姓名</span>
                 <input id="leaderName" name="leaderName" type="text" />
               </label>
-              <div class="amount-list" id="leaderAmounts"></div>
+              <div class="leader-unit-grid" id="leaderUnitCounts"></div>
+              <div class="amount-list" id="leaderAmounts" hidden></div>
             </section>
 
             <aside class="mobile-status" id="mobileStatus" aria-live="polite"></aside>
 
-            <section class="form-section team-edit" aria-labelledby="membersHeading">
+            <section class="form-section team-edit" aria-labelledby="membersHeading" hidden>
               <div class="section-title">
                 <h2 id="membersHeading">隊員</h2>
                 <button class="icon-button" data-action="add-member" type="button" title="新增隊員" aria-label="新增隊員">+</button>
@@ -134,7 +134,7 @@
             </article>
           </section>
 
-          <section class="pyramid-frame" aria-labelledby="pyramidHeading">
+          <section class="pyramid-frame" aria-labelledby="pyramidHeading" hidden>
             <div class="panel-head compact">
               <div>
                 <p class="eyebrow">圖像模式</p>
@@ -150,7 +150,7 @@
             <div id="pyramid" class="pyramid-canvas"></div>
           </section>
 
-          <section class="detail-grid">
+          <section class="detail-grid" hidden>
             <details class="detail-panel cycle-panel team-only">
               <summary class="detail-summary">
                 <span>五大輪迴明細</span>
@@ -240,6 +240,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260606-count-status"></script>
+    <script src="./app.js?v=20260606-five-gates"></script>
   </body>
 </html>
