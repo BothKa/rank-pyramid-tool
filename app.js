@@ -86,9 +86,57 @@
   const STORAGE_KEY = "rank-pyramid-v1";
 
   function toWan(raw) {
-    const n = parseFloat(String(raw ?? "").replace(/,/g, ""));
-    if (Number.isNaN(n) || n <= 0) return 0;
-    return n > 10000 ? n / 10000 : n;
+    const text = normalizeAmountText(raw);
+    if (!text) return 0;
+
+    const hasYi = /[億亿]/.test(text);
+    const hasWan = /[萬万]/.test(text);
+    const hasYuan = /元/.test(text);
+
+    if (hasYi || hasWan || hasYuan) {
+      return amountTextToWan(text);
+    }
+
+    const n = Number(text);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return n;
+  }
+
+  function normalizeAmountText(raw) {
+    return String(raw ?? "")
+      .trim()
+      .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+      .replace(/．/g, ".")
+      .replace(/[，,]/g, "")
+      .replace(/\s+/g, "")
+      .replace(/(?:NTD|TWD|NT\$|台幣|新台幣|\$)/gi, "");
+  }
+
+  function amountTextToWan(text) {
+    let total = 0;
+    let rest = text;
+
+    rest = rest.replace(/([+-]?\d+(?:\.\d+)?(?:e[+-]?\d+)?)([億亿])/gi, (_match, value) => {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > 0) total += n * 10000;
+      return "";
+    });
+
+    rest = rest.replace(/([+-]?\d+(?:\.\d+)?(?:e[+-]?\d+)?)([萬万])/gi, (_match, value) => {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > 0) total += n;
+      return "";
+    });
+
+    rest = rest.replace(/([+-]?\d+(?:\.\d+)?(?:e[+-]?\d+)?)(元)/gi, (_match, value) => {
+      const n = Number(value);
+      if (Number.isFinite(n) && n > 0) total += n / 10000;
+      return "";
+    });
+
+    const tail = Number(rest);
+    if (Number.isFinite(tail) && tail > 0) total += tail;
+    return total;
   }
 
   function gateFor(wan) {

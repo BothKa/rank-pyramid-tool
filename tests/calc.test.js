@@ -24,8 +24,15 @@ function membersAt(gateBase, count, startId = 1) {
   }));
 }
 
-assert.equal(toWan("12,000"), 1.2);
+assert.equal(toWan("12,000"), 12000);
+assert.equal(toWan("12,000元"), 1.2);
 assert.equal(toWan("880"), 880);
+assert.equal(toWan("22000"), 22000);
+assert.equal(toWan("2.2億"), 22000);
+assert.equal(toWan("1億2000萬"), 12000);
+assert.equal(toWan("1億2000"), 12000);
+assert.equal(toWan("100000000元"), 10000);
+assert.equal(toWan("22000萬"), 22000);
 assert.equal(toWan("-1"), 0);
 
 assert.equal(gateFor(2.2).name, "個人關");
@@ -33,7 +40,8 @@ assert.equal(gateFor(87).name, "事業關");
 assert.equal(gateFor(88000).name, "外太空關");
 assert.equal(gateFor(0), null);
 
-assert.equal(maxWanOf([{ v: "2.2" }, { v: "88" }, { v: "2200000" }]), 220);
+assert.equal(gateFor(toWan("2.2億")).name, "太空關");
+assert.equal(maxWanOf([{ v: "2.2" }, { v: "88" }, { v: "2200000元" }]), 220);
 assert.equal(teamTierFor(3).label, "1:3");
 assert.equal(teamTierFor(4).label, "3:5");
 assert.equal(teamTierFor(13).label, "13:1");
