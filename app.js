@@ -1,6 +1,7 @@
 (function (root) {
   "use strict";
 
+  let cumulativeTrueWan = 0;
   const GATES = [
     { idx: 0, name: "個人關", base: 2.2, col: "#e74c3c", bg: "#fff5f5" },
     { idx: 1, name: "家庭關", base: 8.8, col: "#e67e22", bg: "#fff8f0" },
@@ -12,11 +13,19 @@
     { idx: 7, name: "世族關", base: 8800, col: "#c0392b", bg: "#fff0f0" },
     { idx: 8, name: "太空關", base: 22000, col: "#d35400", bg: "#fff4ec" },
     { idx: 9, name: "外太空關", base: 88000, col: "#1a252f", bg: "#eceff1" }
-  ].map((g) => ({
-    ...g,
-    tier: Math.floor(g.idx / 2),
-    side: g.idx % 2 === 0 ? "left" : "right"
-  }));
+  ].map((g) => {
+    const zhenMingWan = g.base * 3;
+    const trueWan = g.base * 13;
+    cumulativeTrueWan += trueWan;
+    return {
+      ...g,
+      zhenMingWan,
+      trueWan,
+      cumulativeTrueWan,
+      tier: Math.floor(g.idx / 2),
+      side: g.idx % 2 === 0 ? "left" : "right"
+    };
+  });
 
   const TEAM_TIERS = [
     { label: "1:3", desc: "入門", min: 1, max: 3, col: "#74b9ff" },
@@ -869,8 +878,12 @@
             <i class="bar-zz"></i>
           </div>
           <div class="gate-step-meta">
-            <span>真命 ${escapeHtml(fmt(gate.base * 3))}</span>
-            <span>真正 ${escapeHtml(fmt(gate.base * 13))}</span>
+            <span>真命 ${escapeHtml(fmt(gate.zhenMingWan))}</span>
+            <span>真正 ${escapeHtml(fmt(gate.trueWan))}</span>
+          </div>
+          <div class="gate-cumulative">
+            <span>累計真正</span>
+            <strong>${escapeHtml(fmt(gate.cumulativeTrueWan))}</strong>
           </div>
           <b>${escapeHtml(state.label)}</b>
         </article>

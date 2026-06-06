@@ -161,5 +161,7 @@ assert.equal(memberView.selectedMember.gate.name, "社會關");
 
 assert.equal(GATES.length, 10);
 assert.deepEqual(GATES.map((gate) => gate.base), [2.2, 8.8, 22, 88, 220, 880, 2200, 8800, 22000, 88000]);
+assert.deepEqual(GATES.map((gate) => Number(gate.trueWan.toFixed(1))), [28.6, 114.4, 286, 1144, 2860, 11440, 28600, 114400, 286000, 1144000]);
+assert.deepEqual(GATES.map((gate) => Number(gate.cumulativeTrueWan.toFixed(1))), [28.6, 143, 429, 1573, 4433, 15873, 44473, 158873, 444873, 1588873]);
 
 console.log("calc.test.js passed");
