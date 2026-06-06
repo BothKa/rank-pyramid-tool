@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const core = require("../app.js");
 
-const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, CYCLES, gateFor, GATES, PHASES, PRIMARY_GATES, leaderTotalWanFromUnitCounts, maxWanOf, phaseStatusFor, teamTierFor, toWan, unitCountsFromWan } = core;
+const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, effectiveUnitAllocation, CYCLES, gateFor, GATES, PHASES, PRIMARY_GATES, leaderTotalWanFromUnitCounts, maxWanOf, phaseStatusFor, phaseStatusForUnitCounts, teamTierFor, toWan, unitCountsFromWan } = core;
 
 function state(leaderAmount, memberAmounts = []) {
   return {
@@ -24,6 +24,21 @@ function membersAt(gateBase, count, startId = 1) {
   }));
 }
 
+function unitState(counts) {
+  return {
+    primaryOnly: true,
+    leader: {
+      name: "隊長",
+      unitCounts: PRIMARY_GATES.map((gate) => ({
+        gateIdx: gate.idx,
+        v: counts[gate.idx] ?? ""
+      })),
+      amounts: []
+    },
+    members: []
+  };
+}
+
 assert.equal(toWan("12,000"), 12000);
 assert.equal(toWan("12,000元"), 1.2);
 assert.equal(toWan("880"), 880);
@@ -44,9 +59,45 @@ assert.equal(leaderTotalWanFromUnitCounts([
   { gateIdx: 4, v: "" },
   { gateIdx: 5, v: "" }
 ]), 660);
+assert.equal(leaderTotalWanFromUnitCounts([{ gateIdx: 0, v: "20" }]), 28.6);
+assert.equal(leaderTotalWanFromUnitCounts([{ gateIdx: 0, v: "2222" }]), 28.6);
+
+const cappedPersonal = effectiveUnitAllocation([{ gateIdx: 0, v: "20" }]);
+assert.deepEqual(cappedPersonal.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 0, 0, 0, 0, 0]);
+
+const downPlacedFamily = effectiveUnitAllocation([
+  { gateIdx: 0, v: "5" },
+  { gateIdx: 1, v: "20" }
+]);
+assert.deepEqual(downPlacedFamily.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 13, 0, 0, 0, 0]);
+assert.equal(Number(downPlacedFamily.effectiveWan.toFixed(1)), 143);
+
+const hugePersonalUnits = analyze(unitState({ 0: "2222" }));
+assert.equal(hugePersonalUnits.leaderWan, 28.6);
+assert.equal(hugePersonalUnits.steps[0].g.name, "個人關");
+assert.equal(hugePersonalUnits.steps[0].status, "cleared");
+assert.equal(hugePersonalUnits.curr.g.name, "家庭關");
+assert.equal(hugePersonalUnits.phaseRows[0].passed, false);
+assert.equal(Number(hugePersonalUnits.phaseRows[0].missing.toFixed(1)), 26.4);
+assert.equal(hugePersonalUnits.phaseRows[0].parts[1].gateName, "家庭");
+assert.equal(hugePersonalUnits.phaseRows[0].parts[1].missingUnits, 3);
+
+const personalFiveFamilyTwenty = analyze(unitState({ 0: "5", 1: "20" }));
+assert.equal(Number(personalFiveFamilyTwenty.leaderWan.toFixed(1)), 143);
+assert.deepEqual(personalFiveFamilyTwenty.unitAllocation.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 13, 0, 0, 0, 0]);
+assert.equal(personalFiveFamilyTwenty.steps[0].status, "cleared");
+assert.equal(personalFiveFamilyTwenty.steps[1].status, "cleared");
+assert.equal(personalFiveFamilyTwenty.curr.g.name, "事業關");
+assert.deepEqual(personalFiveFamilyTwenty.phaseRows.map((row) => row.passed), [true, false, false, false, false]);
+assert.equal(personalFiveFamilyTwenty.phaseRows[1].parts[0].missingUnits, 0);
+assert.equal(personalFiveFamilyTwenty.phaseRows[1].parts[1].gateName, "事業");
+assert.equal(personalFiveFamilyTwenty.phaseRows[1].parts[1].missingUnits, 3);
+
 const unitCounts660 = unitCountsFromWan(660);
 assert.deepEqual(unitCounts660.map((item) => item.v), ["13", "13", "13", "2.625", "", ""]);
 assert.equal(Number(leaderTotalWanFromUnitCounts(unitCounts660).toFixed(1)), 660);
+assert.deepEqual(phaseStatusForUnitCounts(effectiveUnitAllocation(unitCounts660).effectiveCounts).map((row) => row.passed), [true, true, false, false, false]);
+assert.equal(Number(phaseStatusForUnitCounts(effectiveUnitAllocation(unitCounts660).effectiveCounts)[2].missing.toFixed(1)), 33);
 
 const carryForwardTwoTwoWan = leaderTotalWanFromUnitCounts([
   { gateIdx: 0, v: "2" },

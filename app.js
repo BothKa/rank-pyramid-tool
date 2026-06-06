@@ -213,11 +213,43 @@
   }
 
   function leaderTotalWanFromUnitCounts(unitCounts) {
+    return effectiveUnitAllocation(unitCounts).effectiveWan;
+  }
+
+  function rawLeaderTotalWanFromUnitCounts(unitCounts) {
     return ensureUnitCounts(unitCounts).reduce((sum, item) => {
-      const gate = GATES.find((candidate) => candidate.idx === Number(item.gateIdx));
+      const gate = PRIMARY_GATES.find((candidate) => candidate.idx === Number(item.gateIdx));
       if (!gate) return sum;
       return sum + toCount(item.v) * gate.base;
     }, 0);
+  }
+
+  function effectiveUnitAllocation(unitCounts) {
+    const rawCounts = PRIMARY_GATES.map((gate) => {
+      const item = ensureUnitCounts(unitCounts).find((candidate) => Number(candidate.gateIdx) === gate.idx);
+      return toCount(item?.v);
+    });
+    const effectiveCounts = Array(PRIMARY_GATES.length).fill(0);
+    let carryWan = 0;
+
+    for (let index = PRIMARY_GATES.length - 1; index >= 0; index -= 1) {
+      const gate = PRIMARY_GATES[index];
+      const availableUnits = rawCounts[index] + carryWan / gate.base;
+      const usedUnits = Math.min(ZHEN_ZHENG_UNITS, availableUnits);
+      effectiveCounts[index] = usedUnits;
+      carryWan = Math.max(0, availableUnits - usedUnits) * gate.base;
+    }
+
+    const effectiveWan = effectiveCounts.reduce((sum, units, index) => {
+      return sum + units * PRIMARY_GATES[index].base;
+    }, 0);
+
+    return {
+      rawCounts,
+      effectiveCounts,
+      effectiveWan,
+      overflowWan: carryWan
+    };
   }
 
   function unitCountsFromWan(wan) {
@@ -295,6 +327,68 @@
         passed: atLeast(amount, phase.passWan),
         progress: phase.segmentWan > 0 ? Math.min(1, appliedWan / phase.segmentWan) : 0,
         missing: Math.max(0, phase.passWan - amount)
+      };
+    });
+  }
+
+  function phaseStatusForUnitCounts(unitCounts) {
+    const available = PRIMARY_GATES.map((gate, index) => {
+      if (Array.isArray(unitCounts)) return Math.max(0, Number(unitCounts[index]) || 0);
+      return Math.max(0, Number(unitCounts?.[gate.idx]) || 0);
+    });
+    let cumulativeAppliedWan = 0;
+    let locked = false;
+
+    return PHASES.map((phase) => {
+      const parts = [];
+      let appliedWan = 0;
+      let passed = false;
+
+      [
+        { gate: phase.lowerGate, base: phase.lowerBase, count: phase.lowerCount },
+        { gate: phase.upperGate, base: phase.upperBase, count: phase.upperCount }
+      ].forEach(({ gate, base, count }) => {
+        const availableAmount = locked ? 0 : (available[gate.idx] || 0) * gate.base;
+        const availableUnits = availableAmount / base;
+        const usedUnits = Math.min(count, availableUnits);
+        const missingUnits = Math.max(0, count - usedUnits);
+        const usedAmount = usedUnits * base;
+
+        if (!locked) {
+          available[gate.idx] = Math.max(0, (available[gate.idx] || 0) - usedAmount / gate.base);
+          appliedWan += usedAmount;
+        }
+
+        parts.push({
+          gate,
+          gateName: gate.name.replace("關", ""),
+          doneUnits: usedUnits,
+          totalUnits: count,
+          missingUnits,
+          base
+        });
+      });
+
+      if (!locked) {
+        cumulativeAppliedWan += appliedWan;
+        passed = parts.every((part) => part.missingUnits <= EPSILON);
+        if (!passed) locked = true;
+      }
+
+      const missing = passed
+        ? 0
+        : Math.max(0, phase.passWan - cumulativeAppliedWan);
+
+      return {
+        phase,
+        amount: cumulativeAppliedWan,
+        inPhaseWan: appliedWan,
+        appliedWan,
+        cumulativeAppliedWan,
+        parts,
+        passed,
+        progress: phase.segmentWan > 0 ? Math.min(1, appliedWan / phase.segmentWan) : 0,
+        missing
       };
     });
   }
@@ -512,6 +606,67 @@
     return { steps, last, curr, leaderWan, tc };
   }
 
+  function calcUnitCascade(unitCounts, members, gates = PRIMARY_GATES) {
+    const leaderWan = unitCounts.reduce((sum, units, index) => {
+      const gate = PRIMARY_GATES[index];
+      return gate ? sum + units * gate.base : sum;
+    }, 0);
+    const tc = teamCoverage(members);
+    const steps = [];
+
+    for (const gate of gates) {
+      const cnt = tc[gate.name] || 0;
+      const teamUnits = cnt;
+      const leaderUnits = unitCounts[gate.idx] || 0;
+      const totalUnits = Math.min(ZHEN_ZHENG_UNITS, teamUnits + leaderUnits);
+      const tAmt = teamUnits * gate.base;
+      const combined = totalUnits * gate.base;
+      const zz = gate.trueWan;
+      const zm = gate.zhenMingWan;
+      const zmNeed = Math.max(0, ZHEN_MING_UNITS - teamUnits) * gate.base;
+      const zzNeed = Math.max(0, ZHEN_ZHENG_UNITS - teamUnits) * gate.base;
+
+      if (teamUnits >= ZHEN_ZHENG_UNITS) {
+        steps.push({ g: gate, status: "covered", cnt, leaderUnits, totalUnits, tAmt, combined: zz, zz, zm, zmNeed, zzNeed, target: "zz", targetNeed: 0, gap: 0, rem: 0 });
+        continue;
+      }
+
+      if (totalUnits >= ZHEN_ZHENG_UNITS) {
+        steps.push({ g: gate, status: "cleared", cnt, leaderUnits, totalUnits, tAmt, combined: zz, zz, zm, need: zzNeed, zmNeed, zzNeed, target: "zz", targetNeed: zzNeed, gap: 0, rem: 0 });
+        continue;
+      }
+
+      const reachedZm = totalUnits >= ZHEN_MING_UNITS;
+      const target = reachedZm ? "zz" : "zm";
+      const targetUnits = reachedZm ? ZHEN_ZHENG_UNITS : ZHEN_MING_UNITS;
+      const targetTotal = targetUnits * gate.base;
+
+      steps.push({
+        g: gate,
+        status: reachedZm ? "at_zm" : "wip",
+        cnt,
+        leaderUnits,
+        totalUnits,
+        tAmt,
+        combined,
+        zz,
+        zm,
+        zmNeed,
+        zzNeed,
+        target,
+        targetNeed: Math.max(0, targetUnits - teamUnits) * gate.base,
+        gap: Math.max(0, targetTotal - combined),
+        rem: leaderUnits * gate.base,
+        pct: targetTotal > 0 ? combined / targetTotal : 0
+      });
+      break;
+    }
+
+    const last = steps.filter((step) => step.status === "cleared" || step.status === "covered").at(-1);
+    const curr = steps.find((step) => step.status === "at_zm" || step.status === "wip");
+    return { steps, last, curr, leaderWan, tc };
+  }
+
   function xianGate(last, curr, gates = GATES) {
     if (!curr) return last ? last.g : null;
     if (curr.status === "at_zm") {
@@ -546,7 +701,12 @@
     const members = state.members || [];
     const settings = normalizeSettings(state.settings, members);
     const activeGates = state.primaryOnly ? PRIMARY_GATES : GATES;
-    const cascade = calcCascade(state.leader.amounts || [], members, activeGates);
+    const unitAllocation = state.primaryOnly && Array.isArray(state.leader?.unitCounts)
+      ? effectiveUnitAllocation(state.leader.unitCounts)
+      : null;
+    const cascade = unitAllocation
+      ? calcUnitCascade(unitAllocation.effectiveCounts, members, activeGates)
+      : calcCascade(state.leader.amounts || [], members, activeGates);
     const positions = memberPositions(members);
     const effectiveCount = positions.filter((member) => member.wan > 0).length;
     const teamTier = teamTierFor(effectiveCount);
@@ -561,7 +721,9 @@
     const teamAmountCycle = cycleStatusFor(teamWan);
     const teamCoverageCycle = cycleStatusForTeamCoverage(positions);
     const teamCycle = settings.teamCycleBasis === "amount" ? teamAmountCycle : teamCoverageCycle;
-    const phaseRows = phaseStatusFor(cascade.leaderWan);
+    const phaseRows = unitAllocation
+      ? phaseStatusForUnitCounts(unitAllocation.effectiveCounts)
+      : phaseStatusFor(cascade.leaderWan);
     const cycleRows = CYCLES.map((cycle) => ({
       cycle,
       leader: cycleProgressAt(leaderCycleWan, cycle),
@@ -587,6 +749,7 @@
       teamCoverageCycle,
       teamCycle,
       phaseRows,
+      unitAllocation,
       cycleRows,
       xian,
       xianInProgress: cascade.curr?.status === "wip",
@@ -633,11 +796,14 @@
     sumWanOf,
     ensureUnitCounts,
     leaderTotalWanFromUnitCounts,
+    rawLeaderTotalWanFromUnitCounts,
+    effectiveUnitAllocation,
     unitCountsFromWan,
     leaderAmountsFromUnitCounts,
     countProgressForUnits,
     countProgressForWan,
     phaseStatusFor,
+    phaseStatusForUnitCounts,
     cycleProgressAt,
     cycleStatusFor,
     cycleStatusForTeamCoverage,
@@ -645,6 +811,7 @@
     memberPositions,
     teamWanOf,
     calcCascade,
+    calcUnitCascade,
     xianGate,
     teamHighGateIdx,
     shiGate,
@@ -932,7 +1099,7 @@
     const gapText = result.curr ? fmt(result.curr.gap) : (result.last ? "0萬" : fmt(PRIMARY_GATES[0].zhenMingWan));
 
     els.summary.innerHTML = [
-      metric("隊長總額", fmt(result.leaderWan), "六單位加總"),
+      metric("隊長總額", fmt(result.leaderWan), "有效單位加總"),
       metric("段數 PASS", `${phasePassCount(result)}/${result.phaseRows.length}`, phaseFocusText(result)),
       metric("先補目標", targetText, hasStarted && !result.curr ? "六關已補足" : `缺 ${gapText}`),
       metric("真正過關", `${clearedCount}/${PRIMARY_GATES.length} 關`, clearedGateText(result))
@@ -1050,6 +1217,17 @@
   }
 
   function phaseRemainingParts(row) {
+    if (Array.isArray(row.parts)) {
+      return row.parts
+        .filter((part) => part.missingUnits > EPSILON)
+        .map((part) => ({
+          gateName: part.gateName,
+          doneUnits: part.doneUnits,
+          totalUnits: part.totalUnits,
+          missingUnits: part.missingUnits
+        }));
+    }
+
     const phase = row.phase;
     const lowerNeedWan = phase.lowerBase * phase.lowerCount;
     const lowerAppliedWan = Math.min(row.appliedWan, lowerNeedWan);
@@ -1138,7 +1316,8 @@
   function overallPhaseProgress(result) {
     const last = result.phaseRows.at(-1);
     if (!last) return 0;
-    return pct(result.leaderWan, last.phase.passWan);
+    const appliedWan = result.phaseRows.reduce((max, row) => Math.max(max, row.cumulativeAppliedWan ?? 0), 0);
+    return pct(appliedWan || result.leaderWan, last.phase.passWan);
   }
 
   function phaseFocusText(result) {
@@ -1344,7 +1523,7 @@
     const gap = result.curr ? fmt(result.curr.gap) : (result.last ? "0萬" : fmt(PRIMARY_GATES[0].zhenMingWan));
 
     els.mobileStatus.innerHTML = `
-      ${mobileStat("總額", fmt(result.leaderWan), "六單位")}
+      ${mobileStat("總額", fmt(result.leaderWan), "有效單位")}
       ${mobileStat("段數", phaseFocusText(result), "目前段數階段")}
       ${mobileStat("缺口", gap, result.curr ? "先補目標" : "已補足")}
       ${mobileStat("真正", `${clearedCount}/${PRIMARY_GATES.length}`, "六關")}
