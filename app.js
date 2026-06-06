@@ -67,7 +67,8 @@
     covered: "團隊真正覆蓋",
     cleared: "真正過關",
     at_zm: "真命過關",
-    wip: "真命前進中"
+    wip: "真命前進中",
+    locked: "未開始"
   };
 
   const ZHEN_MING_UNITS = 3;
@@ -230,6 +231,92 @@
   function leaderAmountsFromUnitCounts(unitCounts) {
     const total = leaderTotalWanFromUnitCounts(unitCounts);
     return [{ id: "leader-unit-total", v: total > EPSILON ? String(total) : "" }];
+  }
+
+  function calcPrimaryUnitStatus(unitCounts) {
+    const cleanCounts = ensureUnitCounts(unitCounts);
+    let leaderWan = 0;
+
+    const steps = PRIMARY_GATES.map((gate) => {
+      const unit = cleanCounts.find((item) => Number(item.gateIdx) === gate.idx);
+      const units = toCount(unit?.v);
+      const combined = units * gate.base;
+      const countProgress = countProgressForUnits(units);
+      leaderWan += combined;
+
+      const baseStep = {
+        g: gate,
+        cnt: 0,
+        tAmt: 0,
+        zz: gate.trueWan,
+        zm: gate.zhenMingWan,
+        units,
+        countProgress,
+        combined,
+        rem: 0,
+        zmNeed: Math.max(0, gate.zhenMingWan - combined),
+        zzNeed: Math.max(0, gate.trueWan - combined)
+      };
+
+      if (units <= EPSILON) {
+        return {
+          ...baseStep,
+          status: "locked",
+          statusText: "未開始",
+          target: "zm",
+          targetNeed: gate.zhenMingWan,
+          gap: gate.zhenMingWan,
+          pct: 0
+        };
+      }
+
+      if (atLeast(units, ZHEN_ZHENG_UNITS)) {
+        return {
+          ...baseStep,
+          status: "cleared",
+          statusText: "真正過關",
+          target: "zz",
+          targetNeed: 0,
+          gap: 0,
+          pct: 1
+        };
+      }
+
+      if (atLeast(units, ZHEN_MING_UNITS)) {
+        return {
+          ...baseStep,
+          status: "at_zm",
+          statusText: "真命過關",
+          target: "zz",
+          targetNeed: gate.trueWan,
+          gap: Math.max(0, (ZHEN_ZHENG_UNITS - units) * gate.base),
+          pct: gate.trueWan > 0 ? combined / gate.trueWan : 0
+        };
+      }
+
+      return {
+        ...baseStep,
+        status: "wip",
+        statusText: "未達真命",
+        target: "zm",
+        targetNeed: gate.zhenMingWan,
+        gap: Math.max(0, (ZHEN_MING_UNITS - units) * gate.base),
+        pct: gate.zhenMingWan > 0 ? combined / gate.zhenMingWan : 0
+      };
+    });
+
+    const hasAnyUnits = steps.some((step) => step.units > EPSILON);
+    const curr = hasAnyUnits ? steps.find((step) => step.status !== "cleared") : null;
+    const last = steps.filter((step) => step.status === "cleared").at(-1) || null;
+
+    return {
+      steps,
+      last,
+      curr,
+      leaderWan,
+      tc: {},
+      primaryUnitMode: true
+    };
   }
 
   function atLeast(value, target) {
@@ -506,7 +593,10 @@
     const members = state.members || [];
     const settings = normalizeSettings(state.settings, members);
     const activeGates = state.primaryOnly ? PRIMARY_GATES : GATES;
-    const cascade = calcCascade(state.leader.amounts || [], members, activeGates);
+    const primaryUnitMode = Boolean(state.primaryOnly && Array.isArray(state.leader?.unitCounts));
+    const cascade = primaryUnitMode
+      ? calcPrimaryUnitStatus(state.leader.unitCounts)
+      : calcCascade(state.leader.amounts || [], members, activeGates);
     const positions = memberPositions(members);
     const effectiveCount = positions.filter((member) => member.wan > 0).length;
     const teamTier = teamTierFor(effectiveCount);
@@ -514,7 +604,9 @@
     const leaderCycleWan = settings.leaderCycleBasis === "max"
       ? maxWanOf(state.leader.amounts || [])
       : cascade.leaderWan;
-    const xian = xianGate(cascade.last, cascade.curr, activeGates);
+    const xian = primaryUnitMode
+      ? (cascade.curr?.g || cascade.last?.g || null)
+      : xianGate(cascade.last, cascade.curr, activeGates);
     const highIdx = teamHighGateIdx(positions);
     const shi = shiGate(xian, highIdx, activeGates);
     const leaderCycle = cycleStatusFor(leaderCycleWan);
@@ -592,6 +684,7 @@
     leaderTotalWanFromUnitCounts,
     unitCountsFromWan,
     leaderAmountsFromUnitCounts,
+    calcPrimaryUnitStatus,
     countProgressForUnits,
     countProgressForWan,
     cycleProgressAt,
@@ -943,7 +1036,7 @@
       const step = result.curr;
       const targetName = step.target === "zm" ? "真命" : "真正";
       const targetTotal = step.target === "zm" ? step.zm : step.zz;
-      const title = `${step.g.name}・${STATUS_TEXT[step.status]}`;
+      const title = `${step.g.name}・${step.statusText || STATUS_TEXT[step.status]}`;
       const sub = step.gap > 0
         ? `還差 ${fmt(step.gap)} 到${step.g.name}${targetName}`
         : `已達${step.g.name}${targetName}`;
@@ -1036,12 +1129,13 @@
       covered: "團隊真正覆蓋",
       cleared: "真正過關",
       at_zm: "真命過關",
-      wip: "真命前進中"
+      wip: "真命前進中",
+      locked: "未開始"
     };
 
     return {
       className: `is-${step.status}`,
-      label: labels[step.status] || "進行中",
+      label: step.statusText || labels[step.status] || "進行中",
       zmPct,
       zzPct
     };
@@ -1055,6 +1149,7 @@
 
     const step = result.steps.find((item) => item.g.idx === gate.idx);
     if (!step) return countProgressForUnits(0);
+    if (step.countProgress) return step.countProgress;
     if (step.status === "covered" || step.status === "cleared") return countProgressForUnits(ZHEN_ZHENG_UNITS);
     return countProgressForWan(step.combined ?? step.tAmt, gate);
   }
@@ -1110,7 +1205,7 @@
       : (result.last ? "五關真命與真正已補足" : `真命缺 ${ZHEN_MING_UNITS}，真正缺 ${ZHEN_ZHENG_UNITS}`);
 
     els.actionList.innerHTML = [
-      actionCard("先得後修", focus, focusSub, "primary"),
+      actionCard("補關目標", focus, focusSub, "primary"),
       actionCard("五關主軸", "個人 / 家庭 / 事業 / 社會 / 國家", `真正過關 ${clearedCount}/${PRIMARY_GATES.length}`, "neutral"),
       actionCard("缺少狀態", nextGate?.name || "—", missingText, "soft")
     ].join("");
@@ -1128,6 +1223,11 @@
 
   function renderWaterfall(result) {
     if (!els.waterfall) return;
+    if (result.primaryUnitMode) {
+      renderPrimaryUnitFlow(result);
+      return;
+    }
+
     if (result.steps.length === 0) {
       els.waterfall.innerHTML = `<div class="empty-card">尚未有補額流程</div>`;
       return;
@@ -1166,6 +1266,44 @@
     `;
   }
 
+  function renderPrimaryUnitFlow(result) {
+    if (result.steps.length === 0 || result.leaderWan <= EPSILON) {
+      els.waterfall.innerHTML = `<div class="empty-card">尚未有單位數</div>`;
+      return;
+    }
+
+    const rows = result.steps.map((step) => {
+      const targetUnits = step.target === "zm" ? ZHEN_MING_UNITS : ZHEN_ZHENG_UNITS;
+      const targetName = step.target === "zm" ? "真命" : "真正";
+      const unitGap = Math.max(0, targetUnits - step.units);
+      const bar = pct(step.units, targetUnits);
+      const status = step.statusText || STATUS_TEXT[step.status] || "進行中";
+      const detail = step.status === "cleared"
+        ? `已達 ${fmtCount(step.units)} 個`
+        : `${targetName}缺 ${fmtCount(unitGap)} 個 / ${fmt(step.gap)}`;
+
+      return `
+        <div class="waterfall-row is-${step.status}" style="--flow: ${bar}%;">
+          <div>
+            <strong>${escapeHtml(step.g.name)}</strong>
+            <small>${escapeHtml(status)}・${escapeHtml(detail)}</small>
+          </div>
+          <div class="flow-bar"><i></i></div>
+          <span>${escapeHtml(`${fmtCount(step.units)}個`)}</span>
+          <em>${escapeHtml(`${fmt(step.combined)} / ${fmt(step.target === "zm" ? step.zm : step.zz)}`)}</em>
+        </div>
+      `;
+    }).join("");
+
+    els.waterfall.innerHTML = `
+      <div class="waterfall-total">
+        <span>隊長總額</span>
+        <strong>${escapeHtml(fmt(result.leaderWan))}</strong>
+      </div>
+      ${rows}
+    `;
+  }
+
   function renderMobileStatus(result) {
     if (!els.mobileStatus) return;
     els.mobileStatus.dataset.viewMode = result.settings.viewMode;
@@ -1176,7 +1314,7 @@
     els.mobileStatus.innerHTML = `
       ${mobileStat("總額", fmt(result.leaderWan), "五單位")}
       ${mobileStat("狀態", focus.value, focus.badge)}
-      ${mobileStat("缺口", gap, result.curr ? "下一目標" : "已補足")}
+      ${mobileStat("缺口", gap, result.last && !result.curr ? "已補足" : "下一目標")}
       ${mobileStat("真正", `${clearedCount}/${PRIMARY_GATES.length}`, "五關")}
     `;
   }

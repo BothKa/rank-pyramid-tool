@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const core = require("../app.js");
 
-const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, CYCLES, gateFor, GATES, PRIMARY_GATES, leaderTotalWanFromUnitCounts, maxWanOf, teamTierFor, toWan, unitCountsFromWan } = core;
+const { analyze, calcCascade, calcPrimaryUnitStatus, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, CYCLES, gateFor, GATES, PRIMARY_GATES, leaderTotalWanFromUnitCounts, maxWanOf, teamTierFor, toWan, unitCountsFromWan } = core;
 
 function state(leaderAmount, memberAmounts = []) {
   return {
@@ -22,6 +22,18 @@ function membersAt(gateBase, count, startId = 1) {
     name: `隊員 ${startId + index}`,
     amounts: [{ id: 1, v: String(gateBase) }]
   }));
+}
+
+function primaryUnitState(counts) {
+  return {
+    primaryOnly: true,
+    leader: {
+      name: "隊長",
+      unitCounts: PRIMARY_GATES.map((gate, index) => ({ gateIdx: gate.idx, v: String(counts[index] ?? "") })),
+      amounts: []
+    },
+    members: []
+  };
 }
 
 assert.equal(toWan("12,000"), 12000);
@@ -46,6 +58,29 @@ assert.equal(leaderTotalWanFromUnitCounts([
 const unitCounts660 = unitCountsFromWan(660);
 assert.deepEqual(unitCounts660.map((item) => item.v), ["13", "13", "13", "2.625", ""]);
 assert.equal(Number(leaderTotalWanFromUnitCounts(unitCounts660).toFixed(1)), 660);
+
+const unitTwoTwo = calcPrimaryUnitStatus([
+  { gateIdx: 0, v: "2" },
+  { gateIdx: 1, v: "2" }
+]);
+assert.equal(unitTwoTwo.leaderWan, 22);
+assert.equal(unitTwoTwo.curr.g.name, "個人關");
+assert.equal(unitTwoTwo.curr.statusText, "未達真命");
+assert.equal(unitTwoTwo.steps[0].statusText, "未達真命");
+assert.equal(unitTwoTwo.steps[1].statusText, "未達真命");
+assert.equal(unitTwoTwo.steps[0].countProgress.zhenMing.missing, 1);
+assert.equal(unitTwoTwo.steps[1].countProgress.zhenMing.missing, 1);
+
+const primaryTwoTwo = analyze(primaryUnitState([2, 2, 0, 0, 0]));
+assert.equal(primaryTwoTwo.leaderWan, 22);
+assert.equal(primaryTwoTwo.curr.g.name, "個人關");
+assert.equal(primaryTwoTwo.curr.statusText, "未達真命");
+assert.equal(primaryTwoTwo.steps[1].statusText, "未達真命");
+
+const primaryExample660 = analyze(primaryUnitState(["13", "13", "13", "2.625", ""]));
+assert.equal(primaryExample660.curr.g.name, "社會關");
+assert.equal(primaryExample660.curr.statusText, "未達真命");
+assert.equal(Number(primaryExample660.curr.gap.toFixed(1)), 33);
 
 assert.equal(gateFor(2.2).name, "個人關");
 assert.equal(gateFor(87).name, "事業關");
