@@ -70,6 +70,8 @@
     wip: "真命前進中"
   };
 
+  const ZHEN_MING_UNITS = 3;
+  const ZHEN_ZHENG_UNITS = 13;
   const EPSILON = 1e-9;
 
   const DEFAULT_SETTINGS = {
@@ -172,6 +174,29 @@
 
   function atLeast(value, target) {
     return value + EPSILON >= target;
+  }
+
+  function countProgressForUnits(rawUnits) {
+    const units = Math.max(0, Number(rawUnits) || 0);
+    const cappedUnits = Math.min(ZHEN_ZHENG_UNITS, units);
+    return {
+      units: cappedUnits,
+      zhenMing: {
+        done: Math.min(ZHEN_MING_UNITS, cappedUnits),
+        total: ZHEN_MING_UNITS,
+        missing: Math.max(0, ZHEN_MING_UNITS - cappedUnits)
+      },
+      zhenZheng: {
+        done: cappedUnits,
+        total: ZHEN_ZHENG_UNITS,
+        missing: Math.max(0, ZHEN_ZHENG_UNITS - cappedUnits)
+      }
+    };
+  }
+
+  function countProgressForWan(wan, gate) {
+    if (!gate?.base) return countProgressForUnits(0);
+    return countProgressForUnits((Number(wan) || 0) / gate.base);
   }
 
   function cycleProgressAt(wan, cycle) {
@@ -490,6 +515,8 @@
     CYCLES,
     TEAM_TIERS,
     STATUS_TEXT,
+    ZHEN_MING_UNITS,
+    ZHEN_ZHENG_UNITS,
     DEFAULT_STATE,
     DEFAULT_SETTINGS,
     toWan,
@@ -497,6 +524,8 @@
     teamTierFor,
     maxWanOf,
     sumWanOf,
+    countProgressForUnits,
+    countProgressForWan,
     cycleProgressAt,
     cycleStatusFor,
     cycleStatusForTeamCoverage,
@@ -866,6 +895,7 @@
       const state = isMemberView
         ? memberGateState(gate, selectedIdx)
         : leaderGateState(result, gate);
+      const countState = gateCountState(result, gate);
       return `
         <article class="gate-step ${state.className}" style="--gate-color: ${gate.col}; --zm: ${state.zmPct}%; --zz: ${state.zzPct}%;">
           <div class="gate-step-head">
@@ -884,6 +914,10 @@
           <div class="gate-cumulative">
             <span>累計真正</span>
             <strong>${escapeHtml(fmt(gate.cumulativeTrueWan))}</strong>
+          </div>
+          <div class="gate-counts">
+            ${gateCountLine("真命數", countState.zhenMing)}
+            ${gateCountLine("真正數", countState.zhenZheng)}
           </div>
           <b>${escapeHtml(state.label)}</b>
         </article>
@@ -915,6 +949,38 @@
       zmPct,
       zzPct
     };
+  }
+
+  function gateCountState(result, gate) {
+    if (result.settings.viewMode === "member") {
+      const member = result.selectedMember;
+      return countProgressForWan(member?.wan || 0, gate);
+    }
+
+    const step = result.steps.find((item) => item.g.idx === gate.idx);
+    if (!step) return countProgressForUnits(0);
+    if (step.status === "covered" || step.status === "cleared") return countProgressForUnits(ZHEN_ZHENG_UNITS);
+    return countProgressForWan(step.combined ?? step.tAmt, gate);
+  }
+
+  function gateCountLine(label, progress) {
+    const complete = progress.missing <= EPSILON;
+    const className = complete ? "is-complete" : "is-missing";
+    const missing = complete ? "已足" : `缺 ${fmtCount(progress.missing)}個`;
+    return `
+      <div class="gate-count-line ${className}">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(`${fmtCount(progress.done)}/${fmtCount(progress.total)}`)}</strong>
+        <small>${escapeHtml(missing)}</small>
+      </div>
+    `;
+  }
+
+  function fmtCount(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "0";
+    if (Math.abs(n - Math.round(n)) < 0.001) return String(Math.round(n));
+    return String(parseFloat(n.toFixed(2)));
   }
 
   function memberGateState(gate, selectedIdx) {

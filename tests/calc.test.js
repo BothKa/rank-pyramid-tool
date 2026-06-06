@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const core = require("../app.js");
 
-const { analyze, calcCascade, cycleStatusFor, cycleStatusForTeamCoverage, CYCLES, gateFor, GATES, maxWanOf, teamTierFor, toWan } = core;
+const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, CYCLES, gateFor, GATES, maxWanOf, teamTierFor, toWan } = core;
 
 function state(leaderAmount, memberAmounts = []) {
   return {
@@ -75,6 +75,12 @@ assert.equal(case660.shi.name, "事業關");
 assert.equal(case660.leaderCycle.cleared.name, "小輪迴");
 assert.equal(case660.leaderCycle.current.name, "中輪迴");
 assert.equal(case660.leaderCycle.remaining, 33);
+
+const case660SocialCounts = countProgressForWan(case660.curr.combined, case660.curr.g);
+assert.equal(Number(case660SocialCounts.zhenMing.done.toFixed(1)), 2.7);
+assert.equal(Number(case660SocialCounts.zhenMing.missing.toFixed(1)), 0.3);
+assert.equal(Number(case660SocialCounts.zhenZheng.done.toFixed(1)), 2.7);
+assert.equal(Number(case660SocialCounts.zhenZheng.missing.toFixed(1)), 10.3);
 
 const case880 = analyze(state(880, [2.2, 2.2, 2.2]));
 assert.equal(case880.curr.status, "at_zm");
@@ -163,5 +169,9 @@ assert.equal(GATES.length, 10);
 assert.deepEqual(GATES.map((gate) => gate.base), [2.2, 8.8, 22, 88, 220, 880, 2200, 8800, 22000, 88000]);
 assert.deepEqual(GATES.map((gate) => Number(gate.trueWan.toFixed(1))), [28.6, 114.4, 286, 1144, 2860, 11440, 28600, 114400, 286000, 1144000]);
 assert.deepEqual(GATES.map((gate) => Number(gate.cumulativeTrueWan.toFixed(1))), [28.6, 143, 429, 1573, 4433, 15873, 44473, 158873, 444873, 1588873]);
+assert.deepEqual(countProgressForUnits(13).zhenMing, { done: 3, total: 3, missing: 0 });
+assert.deepEqual(countProgressForUnits(13).zhenZheng, { done: 13, total: 13, missing: 0 });
+assert.deepEqual(countProgressForUnits(1).zhenMing, { done: 1, total: 3, missing: 2 });
+assert.deepEqual(countProgressForUnits(1).zhenZheng, { done: 1, total: 13, missing: 12 });
 
 console.log("calc.test.js passed");
