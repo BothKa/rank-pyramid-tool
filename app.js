@@ -862,6 +862,7 @@
     summary: document.getElementById("summary"),
     mobileStatus: document.getElementById("mobileStatus"),
     phaseLights: document.getElementById("phaseLights"),
+    gateUnitOverview: document.getElementById("gateUnitOverview"),
     gateStepper: document.getElementById("gateStepper"),
     actionList: document.getElementById("actionList"),
     waterfall: document.getElementById("waterfall"),
@@ -941,6 +942,7 @@
     renderStatusOverview(result);
     renderSummary(result);
     renderPhaseLights(result);
+    renderGateUnitOverview(result);
     renderGateStepper(result);
     renderActionList(result);
     renderWaterfall(result);
@@ -1373,6 +1375,8 @@
         ? memberGateState(gate, selectedIdx)
         : leaderGateState(result, gate);
       const countState = gateCountState(result, gate);
+      const currentUnits = effectiveUnitsForGate(result, gate);
+      const truePct = pct(currentUnits, TRUE_CLEAR_UNITS);
       return `
         <article class="gate-step ${state.className}" style="--gate-color: ${gate.col}; --zm: ${state.zmPct}%; --zz: ${state.zzPct}%;">
           <div class="gate-step-head">
@@ -1380,9 +1384,14 @@
             <strong>${escapeHtml(gate.name)}</strong>
           </div>
           <small>${escapeHtml(fmt(gate.base))}</small>
-          <div class="gate-bars" aria-hidden="true">
-            <i class="bar-zm"></i>
-            <i class="bar-zz"></i>
+          <div class="gate-current">
+            <span>目前有效單位</span>
+            <strong>${escapeHtml(fmtCount(currentUnits))}<small>/13</small></strong>
+            <em>${escapeHtml(`${truePct}%`)}</em>
+          </div>
+          <div class="gate-bars" aria-label="${escapeHtml(`${gate.name}進度`)}">
+            ${gateProgressLine("真命", "bar-zm", state.zmPct)}
+            ${gateProgressLine("真正", "bar-zz", state.zzPct)}
           </div>
           <div class="gate-step-meta">
             <span>真命 ${escapeHtml(fmt(gate.zhenMingWan))}</span>
@@ -1401,6 +1410,44 @@
         </article>
       `;
     }).join("");
+  }
+
+  function renderGateUnitOverview(result) {
+    if (!els.gateUnitOverview) return;
+
+    els.gateUnitOverview.innerHTML = PRIMARY_GATES.map((gate) => {
+      const units = effectiveUnitsForGate(result, gate);
+      const percent = pct(units, TRUE_CLEAR_UNITS);
+      const status = units >= TRUE_CLEAR_UNITS - EPSILON ? "滿單位" : `${percent}%`;
+      return `
+        <article class="gate-unit-cell" style="--gate-color: ${gate.col}; --unit-progress: ${percent}%;">
+          <span>${escapeHtml(gate.name.replace("關", ""))}</span>
+          <strong>${escapeHtml(fmtCount(units))}<small>/13</small></strong>
+          <em>${escapeHtml(status)}</em>
+          <i aria-hidden="true"></i>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function effectiveUnitsForGate(result, gate) {
+    const directUnits = result.unitAllocation?.effectiveCounts?.[gate.idx];
+    if (directUnits != null) return Math.min(TRUE_CLEAR_UNITS, Math.max(0, Number(directUnits) || 0));
+
+    const step = result.steps.find((item) => item.g.idx === gate.idx);
+    if (!step) return 0;
+    return Math.min(TRUE_CLEAR_UNITS, Math.max(0, Number(step.totalUnits) || 0));
+  }
+
+  function gateProgressLine(label, className, percent) {
+    const cleanPercent = pct(Number(percent) || 0, 100);
+    return `
+      <div class="gate-progress-row">
+        <span>${escapeHtml(label)}</span>
+        <i class="${escapeHtml(className)}" aria-hidden="true"></i>
+        <strong>${escapeHtml(`${cleanPercent}%`)}</strong>
+      </div>
+    `;
   }
 
   function leaderGateState(result, gate) {

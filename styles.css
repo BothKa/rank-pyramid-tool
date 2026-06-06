@@ -709,6 +709,76 @@ body[data-view-mode="member"] .team-edit {
   opacity: 0.68;
 }
 
+.gate-unit-overview {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.gate-unit-cell {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(101, 113, 122, 0.16);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--gate-color), #ffffff 92%), #ffffff 70%),
+    #ffffff;
+  padding: 8px;
+}
+
+.gate-unit-cell span,
+.gate-current span,
+.gate-progress-row span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.gate-unit-cell strong,
+.gate-current strong {
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.05;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.gate-unit-cell strong small,
+.gate-current strong small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.gate-unit-cell em,
+.gate-current em {
+  color: color-mix(in srgb, var(--gate-color), #20242a 20%);
+  font-style: normal;
+  font-size: 0.7rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.gate-unit-cell i {
+  display: block;
+  height: 5px;
+  border-radius: 999px;
+  background: #edf1ec;
+  overflow: hidden;
+}
+
+.gate-unit-cell i::before {
+  content: "";
+  display: block;
+  width: var(--unit-progress);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gate-color);
+}
+
 .gate-stepper {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -722,7 +792,7 @@ body[data-view-mode="member"] .team-edit {
   border-radius: 8px;
   background: #ffffff;
   padding: 10px;
-  min-height: 220px;
+  min-height: 262px;
   display: grid;
   gap: 7px;
   align-content: start;
@@ -762,12 +832,43 @@ body[data-view-mode="member"] .team-edit {
   font-weight: 800;
 }
 
-.gate-bars {
+.gate-current {
   display: grid;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  align-items: end;
+  border: 1px solid color-mix(in srgb, var(--gate-color), #ffffff 76%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--gate-color), #ffffff 91%);
+  padding: 7px;
 }
 
-.gate-bars i {
+.gate-current span {
+  grid-column: 1 / -1;
+  color: color-mix(in srgb, var(--gate-color), #20242a 35%);
+}
+
+.gate-current em {
+  justify-self: end;
+  align-self: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 4px 6px;
+}
+
+.gate-bars {
+  display: grid;
+  gap: 4px;
+}
+
+.gate-progress-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 38px;
+  gap: 6px;
+  align-items: center;
+}
+
+.gate-progress-row i {
   display: block;
   height: 7px;
   border-radius: 999px;
@@ -775,7 +876,7 @@ body[data-view-mode="member"] .team-edit {
   overflow: hidden;
 }
 
-.gate-bars i::before {
+.gate-progress-row i::before {
   content: "";
   display: block;
   height: 100%;
@@ -783,13 +884,22 @@ body[data-view-mode="member"] .team-edit {
   background: var(--gate-color);
 }
 
-.gate-bars .bar-zm::before {
+.gate-progress-row .bar-zm::before {
   width: var(--zm);
   opacity: 0.62;
 }
 
-.gate-bars .bar-zz::before {
+.gate-progress-row .bar-zz::before {
   width: var(--zz);
+}
+
+.gate-progress-row strong {
+  justify-self: end;
+  color: var(--ink);
+  font-size: 0.66rem;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .gate-step-meta {
@@ -1507,6 +1617,10 @@ td small {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .gate-unit-overview {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .action-list {
     grid-template-columns: 1fr;
   }
@@ -1640,6 +1754,19 @@ td small {
     display: none;
   }
 
+  .gate-unit-overview {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scroll-snap-type: x mandatory;
+  }
+
+  .gate-unit-cell {
+    flex: 0 0 118px;
+    scroll-snap-align: start;
+  }
+
   .gate-stepper {
     display: flex;
     gap: 8px;
@@ -1649,9 +1776,9 @@ td small {
   }
 
   .gate-step {
-    flex: 0 0 168px;
+    flex: 0 0 178px;
     scroll-snap-align: start;
-    min-height: 226px;
+    min-height: 276px;
   }
 
   .decision-grid {
