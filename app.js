@@ -75,19 +75,26 @@
   const EPSILON = 1e-9;
   const PRIMARY_GATE_COUNT = 6;
   const PRIMARY_GATES = GATES.slice(0, PRIMARY_GATE_COUNT);
+  let cumulativePhaseWan = 0;
   const PHASES = [
-    { idx: 0, name: "第一階段", lowerGate: GATES[0], upperGate: GATES[1] },
-    { idx: 1, name: "第二階段", lowerGate: GATES[2], upperGate: GATES[3] },
-    { idx: 2, name: "第三階段", lowerGate: GATES[4], upperGate: GATES[5] }
+    { idx: 0, name: "第一段數", lowerGate: GATES[0], lowerCount: 13, upperGate: GATES[1], upperCount: 3 },
+    { idx: 1, name: "第二段數", lowerGate: GATES[1], lowerCount: 10, upperGate: GATES[2], upperCount: 3 },
+    { idx: 2, name: "第三段數", lowerGate: GATES[2], lowerCount: 10, upperGate: GATES[3], upperCount: 3 },
+    { idx: 3, name: "第四段數", lowerGate: GATES[3], lowerCount: 10, upperGate: GATES[4], upperCount: 3 },
+    { idx: 4, name: "第五段數", lowerGate: GATES[4], lowerCount: 10, upperGate: GATES[5], upperCount: 3, upperBase: 220 }
   ].map((phase) => {
-    const lowerCount = ZHEN_ZHENG_UNITS;
-    const upperCount = ZHEN_MING_UNITS;
-    const passWan = phase.lowerGate.base * lowerCount + phase.upperGate.base * upperCount;
+    const lowerBase = phase.lowerBase || phase.lowerGate.base;
+    const upperBase = phase.upperBase || phase.upperGate.base;
+    const segmentWan = lowerBase * phase.lowerCount + upperBase * phase.upperCount;
+    const previousPassWan = cumulativePhaseWan;
+    cumulativePhaseWan += segmentWan;
     return {
       ...phase,
-      lowerCount,
-      upperCount,
-      passWan,
+      lowerBase,
+      upperBase,
+      segmentWan,
+      previousPassWan,
+      passWan: cumulativePhaseWan,
       col: phase.upperGate.col
     };
   });
@@ -278,13 +285,15 @@
   function phaseStatusFor(wan) {
     const amount = Math.max(0, Number(wan) || 0);
     return PHASES.map((phase) => {
-      const appliedWan = Math.min(amount, phase.passWan);
+      const inPhaseWan = Math.max(0, amount - phase.previousPassWan);
+      const appliedWan = Math.min(phase.segmentWan, inPhaseWan);
       return {
         phase,
         amount,
+        inPhaseWan,
         appliedWan,
         passed: atLeast(amount, phase.passWan),
-        progress: phase.passWan > 0 ? Math.min(1, appliedWan / phase.passWan) : 0,
+        progress: phase.segmentWan > 0 ? Math.min(1, appliedWan / phase.segmentWan) : 0,
         missing: Math.max(0, phase.passWan - amount)
       };
     });
@@ -915,7 +924,6 @@
   }
 
   function renderSummary(result) {
-    const focus = leaderFocus(result);
     const clearedCount = result.steps.filter((step) => step.status === "cleared" || step.status === "covered").length;
     const hasStarted = Boolean(result.curr || result.last);
     const targetText = result.curr
@@ -925,7 +933,7 @@
 
     els.summary.innerHTML = [
       metric("隊長總額", fmt(result.leaderWan), "六單位加總"),
-      metric("目前狀態", focus.title, focus.sub),
+      metric("目前段數階段", phaseFocusText(result), phaseFocusSubText(result)),
       metric("下一目標", targetText, hasStarted && !result.curr ? "六關已補足" : `缺 ${gapText}`),
       metric("真正過關", `${clearedCount}/${PRIMARY_GATES.length} 關`, clearedGateText(result))
     ].join("");
@@ -959,9 +967,9 @@
 
     els.statusOverview.innerHTML = `
       <div class="status-copy">
-        <span class="status-kicker">目前狀態</span>
-        <h2>${escapeHtml(focus.title)}</h2>
-        <p>${escapeHtml(focus.sub)}</p>
+        <span class="status-kicker">目前段數階段</span>
+        <h2>${escapeHtml(phaseFocusText(result))}</h2>
+        <p>${escapeHtml(phaseFocusSubText(result))}</p>
       </div>
       <div class="status-focus">
         <span>${escapeHtml(focus.badge)}</span>
@@ -1028,10 +1036,10 @@
       const className = row.passed
         ? "is-passed"
         : (phase.idx === currentIndex ? "is-current" : "is-waiting");
-      const status = row.passed ? "通過亮燈" : "尚未亮燈";
-      const missingText = row.passed ? "已達門檻" : `差 ${fmt(row.missing)}`;
+      const status = row.passed ? "PASS" : "未 PASS";
+      const missingText = row.passed ? "已達 PASS" : `差 ${fmt(row.missing)}`;
       const progress = Math.round(row.progress * 100);
-      const pairText = `${phase.lowerGate.name.replace("關", "")} ${fmt(phase.lowerGate.base)} × ${phase.lowerCount} + ${phase.upperGate.name.replace("關", "")} ${fmt(phase.upperGate.base)} × ${phase.upperCount}`;
+      const pairText = `${phase.lowerGate.name.replace("關", "")} ${fmt(phase.lowerBase)} × ${phase.lowerCount} + ${phase.upperGate.name.replace("關", "")} ${fmt(phase.upperBase)} × ${phase.upperCount}`;
 
       return `
         <article class="phase-card ${className}" style="--phase-color: ${phase.col}; --phase-progress: ${progress}%;">
@@ -1042,10 +1050,23 @@
           </div>
           <p>${escapeHtml(pairText)}</p>
           <div class="phase-bar" aria-hidden="true"><i></i></div>
-          <small>門檻 ${escapeHtml(fmt(phase.passWan))}・${escapeHtml(missingText)}</small>
+          <small>本段 ${escapeHtml(fmt(phase.segmentWan))}・累計 ${escapeHtml(fmt(phase.passWan))}・${escapeHtml(missingText)}</small>
         </article>
       `;
     }).join("");
+  }
+
+  function phaseFocusText(result) {
+    const current = result.phaseRows.find((row) => !row.passed);
+    if (current) return `${current.phase.name}・${current.passed ? "PASS" : "未 PASS"}`;
+    return "五段數・全部 PASS";
+  }
+
+  function phaseFocusSubText(result) {
+    const current = result.phaseRows.find((row) => !row.passed);
+    if (current) return `還差 ${fmt(current.missing)} 到${current.phase.name} PASS`;
+    const last = result.phaseRows.at(-1);
+    return last ? `已達 ${fmt(last.phase.passWan)} 累計門檻` : "等待隊長單位數";
   }
 
   function renderGateStepper(result) {
@@ -1235,13 +1256,12 @@
   function renderMobileStatus(result) {
     if (!els.mobileStatus) return;
     els.mobileStatus.dataset.viewMode = result.settings.viewMode;
-    const focus = leaderFocus(result);
     const clearedCount = result.steps.filter((step) => step.status === "cleared" || step.status === "covered").length;
     const gap = result.curr ? fmt(result.curr.gap) : (result.last ? "0萬" : fmt(PRIMARY_GATES[0].zhenMingWan));
 
     els.mobileStatus.innerHTML = `
       ${mobileStat("總額", fmt(result.leaderWan), "六單位")}
-      ${mobileStat("狀態", focus.value, focus.badge)}
+      ${mobileStat("段數", phaseFocusText(result), "目前段數階段")}
       ${mobileStat("缺口", gap, result.curr ? "下一目標" : "已補足")}
       ${mobileStat("真正", `${clearedCount}/${PRIMARY_GATES.length}`, "六關")}
     `;

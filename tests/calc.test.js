@@ -95,18 +95,23 @@ assert.equal(cycleStatusFor(693).cleared.name, "中輪迴");
 assert.equal(cycleStatusFor(693).current.name, "大輪迴");
 assert.equal(cycleStatusFor(708873).allCleared, true);
 
-assert.deepEqual(PHASES.map((phase) => phase.name), ["第一階段", "第二階段", "第三階段"]);
-assert.deepEqual(PHASES.map((phase) => phase.passWan), [55, 550, 5500]);
-assert.deepEqual(PHASES.map((phase) => [phase.lowerGate.name, phase.upperGate.name]), [
-  ["個人關", "家庭關"],
-  ["事業關", "社會關"],
-  ["國家關", "民族關"]
+assert.deepEqual(PHASES.map((phase) => phase.name), ["第一段數", "第二段數", "第三段數", "第四段數", "第五段數"]);
+assert.deepEqual(PHASES.map((phase) => phase.segmentWan), [55, 154, 484, 1540, 2860]);
+assert.deepEqual(PHASES.map((phase) => phase.passWan), [55, 209, 693, 2233, 5093]);
+assert.deepEqual(PHASES.map((phase) => [phase.lowerGate.name, phase.lowerBase, phase.lowerCount, phase.upperGate.name, phase.upperBase, phase.upperCount]), [
+  ["個人關", 2.2, 13, "家庭關", 8.8, 3],
+  ["家庭關", 8.8, 10, "事業關", 22, 3],
+  ["事業關", 22, 10, "社會關", 88, 3],
+  ["社會關", 88, 10, "國家關", 220, 3],
+  ["國家關", 220, 10, "民族關", 220, 3]
 ]);
-assert.deepEqual(phaseStatusFor(54.9).map((row) => row.passed), [false, false, false]);
-assert.deepEqual(phaseStatusFor(55).map((row) => row.passed), [true, false, false]);
-assert.deepEqual(phaseStatusFor(550).map((row) => row.passed), [true, true, false]);
-assert.deepEqual(phaseStatusFor(5500).map((row) => row.passed), [true, true, true]);
-assert.equal(phaseStatusFor(660)[2].missing, 4840);
+assert.deepEqual(phaseStatusFor(54.9).map((row) => row.passed), [false, false, false, false, false]);
+assert.deepEqual(phaseStatusFor(55).map((row) => row.passed), [true, false, false, false, false]);
+assert.deepEqual(phaseStatusFor(209).map((row) => row.passed), [true, true, false, false, false]);
+assert.deepEqual(phaseStatusFor(660).map((row) => row.passed), [true, true, false, false, false]);
+assert.equal(phaseStatusFor(660)[2].missing, 33);
+assert.deepEqual(phaseStatusFor(693).map((row) => row.passed), [true, true, true, false, false]);
+assert.deepEqual(phaseStatusFor(5093).map((row) => row.passed), [true, true, true, true, true]);
 
 const case660 = analyze(state(660, [2.2, 2.2, 2.2]));
 assert.equal(case660.leaderWan, 660);
