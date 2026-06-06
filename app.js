@@ -1,6 +1,9 @@
 (function (root) {
   "use strict";
 
+  const ZHEN_MING_UNITS = 3;
+  const ZHEN_ZHENG_UNITS = 10;
+  const TRUE_CLEAR_UNITS = ZHEN_MING_UNITS + ZHEN_ZHENG_UNITS;
   let cumulativeTrueWan = 0;
   const GATES = [
     { idx: 0, name: "個人關", base: 2.2, col: "#e74c3c", bg: "#fff5f5" },
@@ -14,8 +17,8 @@
     { idx: 8, name: "太空關", base: 22000, col: "#d35400", bg: "#fff4ec" },
     { idx: 9, name: "外太空關", base: 88000, col: "#1a252f", bg: "#eceff1" }
   ].map((g) => {
-    const zhenMingWan = g.base * 3;
-    const trueWan = g.base * 13;
+    const zhenMingWan = g.base * ZHEN_MING_UNITS;
+    const trueWan = g.base * TRUE_CLEAR_UNITS;
     cumulativeTrueWan += trueWan;
     return {
       ...g,
@@ -70,8 +73,6 @@
     wip: "真命前進中"
   };
 
-  const ZHEN_MING_UNITS = 3;
-  const ZHEN_ZHENG_UNITS = 13;
   const EPSILON = 1e-9;
   const PRIMARY_GATE_COUNT = 6;
   const PRIMARY_GATES = GATES.slice(0, PRIMARY_GATE_COUNT);
@@ -225,20 +226,31 @@
   }
 
   function effectiveUnitAllocation(unitCounts) {
+    const ensuredCounts = ensureUnitCounts(unitCounts);
     const rawCounts = PRIMARY_GATES.map((gate) => {
-      const item = ensureUnitCounts(unitCounts).find((candidate) => Number(candidate.gateIdx) === gate.idx);
+      const item = ensuredCounts.find((candidate) => Number(candidate.gateIdx) === gate.idx);
       return toCount(item?.v);
     });
     const effectiveCounts = Array(PRIMARY_GATES.length).fill(0);
-    let carryWan = 0;
+    const rawWan = rawCounts.reduce((sum, units, index) => sum + units * PRIMARY_GATES[index].base, 0);
+    let overflowWan = 0;
 
-    for (let index = PRIMARY_GATES.length - 1; index >= 0; index -= 1) {
-      const gate = PRIMARY_GATES[index];
-      const availableUnits = rawCounts[index] + carryWan / gate.base;
-      const usedUnits = Math.min(ZHEN_ZHENG_UNITS, availableUnits);
-      effectiveCounts[index] = usedUnits;
-      carryWan = Math.max(0, availableUnits - usedUnits) * gate.base;
-    }
+    rawCounts.forEach((sourceUnits, sourceIndex) => {
+      let availableWan = sourceUnits * PRIMARY_GATES[sourceIndex].base;
+      if (availableWan <= EPSILON) return;
+
+      for (let targetIndex = 0; targetIndex <= sourceIndex && availableWan > EPSILON; targetIndex += 1) {
+        const targetGate = PRIMARY_GATES[targetIndex];
+        const capacityUnits = Math.max(0, TRUE_CLEAR_UNITS - effectiveCounts[targetIndex]);
+        if (capacityUnits <= EPSILON) continue;
+
+        const fillUnits = Math.min(capacityUnits, availableWan / targetGate.base);
+        effectiveCounts[targetIndex] += fillUnits;
+        availableWan -= fillUnits * targetGate.base;
+      }
+
+      overflowWan += Math.max(0, availableWan);
+    });
 
     const effectiveWan = effectiveCounts.reduce((sum, units, index) => {
       return sum + units * PRIMARY_GATES[index].base;
@@ -247,8 +259,9 @@
     return {
       rawCounts,
       effectiveCounts,
+      rawWan,
       effectiveWan,
-      overflowWan: carryWan
+      overflowWan
     };
   }
 
@@ -258,7 +271,7 @@
       const isLastGate = index === PRIMARY_GATES.length - 1;
       const units = isLastGate
         ? remaining / gate.base
-        : Math.min(ZHEN_ZHENG_UNITS, remaining / gate.base);
+        : Math.min(TRUE_CLEAR_UNITS, remaining / gate.base);
       remaining = Math.max(0, remaining - units * gate.base);
       return {
         gateIdx: gate.idx,
@@ -293,18 +306,20 @@
 
   function countProgressForUnits(rawUnits) {
     const units = Math.max(0, Number(rawUnits) || 0);
-    const cappedUnits = Math.min(ZHEN_ZHENG_UNITS, units);
+    const cappedUnits = Math.min(TRUE_CLEAR_UNITS, units);
+    const zhenMingDone = Math.min(ZHEN_MING_UNITS, cappedUnits);
+    const zhenZhengDone = Math.min(ZHEN_ZHENG_UNITS, Math.max(0, cappedUnits - ZHEN_MING_UNITS));
     return {
       units: cappedUnits,
       zhenMing: {
-        done: Math.min(ZHEN_MING_UNITS, cappedUnits),
+        done: zhenMingDone,
         total: ZHEN_MING_UNITS,
-        missing: Math.max(0, ZHEN_MING_UNITS - cappedUnits)
+        missing: Math.max(0, ZHEN_MING_UNITS - zhenMingDone)
       },
       zhenZheng: {
-        done: cappedUnits,
+        done: zhenZhengDone,
         total: ZHEN_ZHENG_UNITS,
-        missing: Math.max(0, ZHEN_ZHENG_UNITS - cappedUnits)
+        missing: Math.max(0, ZHEN_ZHENG_UNITS - zhenZhengDone)
       }
     };
   }
@@ -618,27 +633,27 @@
       const cnt = tc[gate.name] || 0;
       const teamUnits = cnt;
       const leaderUnits = unitCounts[gate.idx] || 0;
-      const totalUnits = Math.min(ZHEN_ZHENG_UNITS, teamUnits + leaderUnits);
+      const totalUnits = Math.min(TRUE_CLEAR_UNITS, teamUnits + leaderUnits);
       const tAmt = teamUnits * gate.base;
       const combined = totalUnits * gate.base;
       const zz = gate.trueWan;
       const zm = gate.zhenMingWan;
       const zmNeed = Math.max(0, ZHEN_MING_UNITS - teamUnits) * gate.base;
-      const zzNeed = Math.max(0, ZHEN_ZHENG_UNITS - teamUnits) * gate.base;
+      const zzNeed = Math.max(0, TRUE_CLEAR_UNITS - teamUnits) * gate.base;
 
-      if (teamUnits >= ZHEN_ZHENG_UNITS) {
+      if (teamUnits >= TRUE_CLEAR_UNITS) {
         steps.push({ g: gate, status: "covered", cnt, leaderUnits, totalUnits, tAmt, combined: zz, zz, zm, zmNeed, zzNeed, target: "zz", targetNeed: 0, gap: 0, rem: 0 });
         continue;
       }
 
-      if (totalUnits >= ZHEN_ZHENG_UNITS) {
+      if (totalUnits >= TRUE_CLEAR_UNITS) {
         steps.push({ g: gate, status: "cleared", cnt, leaderUnits, totalUnits, tAmt, combined: zz, zz, zm, need: zzNeed, zmNeed, zzNeed, target: "zz", targetNeed: zzNeed, gap: 0, rem: 0 });
         continue;
       }
 
       const reachedZm = totalUnits >= ZHEN_MING_UNITS;
       const target = reachedZm ? "zz" : "zm";
-      const targetUnits = reachedZm ? ZHEN_ZHENG_UNITS : ZHEN_MING_UNITS;
+      const targetUnits = reachedZm ? TRUE_CLEAR_UNITS : ZHEN_MING_UNITS;
       const targetTotal = targetUnits * gate.base;
 
       steps.push({
@@ -711,6 +726,7 @@
     const effectiveCount = positions.filter((member) => member.wan > 0).length;
     const teamTier = teamTierFor(effectiveCount);
     const teamWan = teamWanOf(positions);
+    const leaderScoreWan = unitAllocation ? unitAllocation.rawWan : cascade.leaderWan;
     const leaderCycleWan = settings.leaderCycleBasis === "max"
       ? maxWanOf(state.leader.amounts || [])
       : cascade.leaderWan;
@@ -743,6 +759,7 @@
       effectiveCount,
       teamTier,
       teamWan,
+      leaderScoreWan,
       leaderCycleWan,
       leaderCycle,
       teamAmountCycle,
@@ -786,6 +803,7 @@
     STATUS_TEXT,
     ZHEN_MING_UNITS,
     ZHEN_ZHENG_UNITS,
+    TRUE_CLEAR_UNITS,
     DEFAULT_STATE,
     DEFAULT_SETTINGS,
     toWan,
@@ -1104,7 +1122,7 @@
     const gapText = result.curr ? fmt(result.curr.gap) : (result.last ? "0萬" : fmt(PRIMARY_GATES[0].zhenMingWan));
 
     els.summary.innerHTML = [
-      metric("隊長總額", fmt(result.leaderWan), "有效單位加總"),
+      metric("隊長總額", fmt(result.leaderScoreWan ?? result.leaderWan), `有效配置 ${fmt(result.leaderWan)}`),
       metric("段數 PASS", `${phasePassCount(result)}/${result.phaseRows.length}`, phaseFocusText(result)),
       metric("先補目標", targetText, hasStarted && !result.curr ? "六關已補足" : `缺 ${gapText}`),
       metric("真正過關", `${clearedCount}/${PRIMARY_GATES.length} 關`, clearedGateText(result))
@@ -1146,6 +1164,10 @@
     const dialLabel = currentPhase ? "進行中" : "全部 PASS";
     const dialColor = currentPhase ? currentPhase.phase.col : "#147b55";
     const dialProgress = overallPhaseProgress(result);
+    const scoreWan = result.leaderScoreWan ?? result.leaderWan ?? 0;
+    const scoreNote = Math.abs(scoreWan - (result.leaderWan || 0)) > EPSILON
+      ? `有效配置 ${fmt(result.leaderWan || 0)}`
+      : "所有單位加總";
 
     els.statusOverview.innerHTML = `
       <div class="status-dial" style="--stage-color: ${dialColor}; --stage-progress: ${dialProgress}%;">
@@ -1157,6 +1179,11 @@
         <span class="status-kicker">目前段數階段</span>
         <h2>${escapeHtml(phaseFocusText(result))}</h2>
         <p>${escapeHtml(phaseFocusSubText(result))}</p>
+      </div>
+      <div class="status-score">
+        <span>總成績</span>
+        <strong>${escapeHtml(fmt(scoreWan))}</strong>
+        <small>${escapeHtml(scoreNote)}</small>
       </div>
       <div class="status-focus">
         <span>${escapeHtml(focus.badge)}</span>
@@ -1359,7 +1386,8 @@
           </div>
           <div class="gate-step-meta">
             <span>真命 ${escapeHtml(fmt(gate.zhenMingWan))}</span>
-            <span>真正 ${escapeHtml(fmt(gate.trueWan))}</span>
+            <span>真正補修 ${escapeHtml(fmt(gate.base * ZHEN_ZHENG_UNITS))}</span>
+            <span>真正過關 ${escapeHtml(fmt(gate.trueWan))}</span>
           </div>
           <div class="gate-cumulative">
             <span>累計真正</span>
@@ -1367,7 +1395,7 @@
           </div>
           <div class="gate-counts">
             ${gateCountLine("真命數", countState.zhenMing)}
-            ${gateCountLine("真正數", countState.zhenZheng)}
+            ${gateCountLine("真正補修", countState.zhenZheng)}
           </div>
           <b>${escapeHtml(state.label)}</b>
         </article>
@@ -1409,7 +1437,7 @@
 
     const step = result.steps.find((item) => item.g.idx === gate.idx);
     if (!step) return countProgressForUnits(0);
-    if (step.status === "covered" || step.status === "cleared") return countProgressForUnits(ZHEN_ZHENG_UNITS);
+    if (step.status === "covered" || step.status === "cleared") return countProgressForUnits(TRUE_CLEAR_UNITS);
     return countProgressForWan(step.combined ?? step.tAmt, gate);
   }
 

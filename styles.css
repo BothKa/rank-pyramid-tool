@@ -427,7 +427,7 @@ body[data-view-mode="member"] .team-edit {
 
 .status-overview {
   display: grid;
-  grid-template-columns: minmax(96px, 0.34fr) minmax(0, 1.5fr) minmax(220px, 0.9fr);
+  grid-template-columns: minmax(96px, 0.32fr) minmax(0, 1.35fr) minmax(150px, 0.55fr) minmax(220px, 0.88fr);
   gap: 16px;
   align-items: center;
   border-radius: 8px;
@@ -452,6 +452,7 @@ body[data-view-mode="member"] .team-edit {
 
 .status-dial,
 .status-copy,
+.status-score,
 .status-focus {
   min-width: 0;
   position: relative;
@@ -523,6 +524,7 @@ body[data-view-mode="member"] .team-edit {
 }
 
 .status-kicker,
+.status-score span,
 .status-focus span {
   display: block;
   color: var(--copper);
@@ -541,6 +543,7 @@ body[data-view-mode="member"] .team-edit {
 }
 
 .status-copy p,
+.status-score small,
 .status-focus small {
   color: var(--muted);
   font-size: 0.92rem;
@@ -548,18 +551,27 @@ body[data-view-mode="member"] .team-edit {
   margin: 0;
 }
 
+.status-score,
 .status-focus {
   border-left: 1px solid rgba(101, 113, 122, 0.18);
   padding-left: 14px;
 }
 
+.status-score strong,
 .status-focus strong {
   display: block;
-  color: var(--green);
   font-size: clamp(1.25rem, 2.4vw, 1.8rem);
   line-height: 1.1;
   margin-bottom: 6px;
   overflow-wrap: anywhere;
+}
+
+.status-score strong {
+  color: var(--ink);
+}
+
+.status-focus strong {
+  color: var(--green);
 }
 
 .phase-panel,
@@ -1470,7 +1482,7 @@ td small {
   }
 
   .status-dial {
-    grid-row: 1 / span 2;
+    grid-row: 1 / span 3;
   }
 
   .status-copy {
@@ -1478,6 +1490,13 @@ td small {
   }
 
   .status-focus {
+    grid-column: 2;
+    border-left: 0;
+    border-top: 1px solid rgba(101, 113, 122, 0.18);
+    padding: 10px 0 0;
+  }
+
+  .status-score {
     grid-column: 2;
     border-left: 0;
     border-top: 1px solid rgba(101, 113, 122, 0.18);
@@ -1584,6 +1603,7 @@ td small {
   }
 
   .status-copy,
+  .status-score,
   .status-focus {
     grid-column: auto;
   }
@@ -1593,10 +1613,12 @@ td small {
   }
 
   .status-copy p,
+  .status-score small,
   .status-focus small {
     font-size: 0.84rem;
   }
 
+  .status-score,
   .status-focus {
     border-left: 0;
     border-top: 1px solid rgba(101, 113, 122, 0.18);

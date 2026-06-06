@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const core = require("../app.js");
 
-const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, effectiveUnitAllocation, CYCLES, gateFor, GATES, PHASES, PRIMARY_GATES, leaderTotalWanFromUnitCounts, maxWanOf, phaseStatusFor, phaseStatusForUnitCounts, teamTierFor, toWan, unitCountsFromWan } = core;
+const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, effectiveUnitAllocation, CYCLES, gateFor, GATES, PHASES, PRIMARY_GATES, leaderTotalWanFromUnitCounts, rawLeaderTotalWanFromUnitCounts, maxWanOf, phaseStatusFor, phaseStatusForUnitCounts, teamTierFor, toWan, unitCountsFromWan } = core;
 
 function state(leaderAmount, memberAmounts = []) {
   return {
@@ -61,9 +61,24 @@ assert.equal(leaderTotalWanFromUnitCounts([
 ]), 660);
 assert.equal(leaderTotalWanFromUnitCounts([{ gateIdx: 0, v: "20" }]), 28.6);
 assert.equal(leaderTotalWanFromUnitCounts([{ gateIdx: 0, v: "2222" }]), 28.6);
+assert.equal(Number(rawLeaderTotalWanFromUnitCounts([{ gateIdx: 0, v: "2222" }]).toFixed(1)), 4888.4);
 
 const cappedPersonal = effectiveUnitAllocation([{ gateIdx: 0, v: "20" }]);
 assert.deepEqual(cappedPersonal.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 0, 0, 0, 0, 0]);
+assert.equal(Number(cappedPersonal.rawWan.toFixed(1)), 44);
+assert.equal(Number(cappedPersonal.effectiveWan.toFixed(1)), 28.6);
+
+const familyOnlyThirteen = effectiveUnitAllocation([{ gateIdx: 1, v: "13" }]);
+assert.deepEqual(familyOnlyThirteen.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 9.75, 0, 0, 0, 0]);
+assert.equal(Number(familyOnlyThirteen.effectiveWan.toFixed(1)), 114.4);
+
+const familyThirteenState = analyze(unitState({ 1: "13" }));
+assert.equal(Number(familyThirteenState.leaderScoreWan.toFixed(1)), 114.4);
+assert.deepEqual(familyThirteenState.phaseRows.map((row) => row.passed), [true, false, false, false, false]);
+assert.equal(familyThirteenState.phaseRows[1].parts[0].gateName, "家庭");
+assert.equal(familyThirteenState.phaseRows[1].parts[0].missingUnits, 3.25);
+assert.equal(familyThirteenState.phaseRows[1].parts[1].gateName, "事業");
+assert.equal(familyThirteenState.phaseRows[1].parts[1].missingUnits, 3);
 
 const downPlacedFamily = effectiveUnitAllocation([
   { gateIdx: 0, v: "5" },
@@ -71,6 +86,13 @@ const downPlacedFamily = effectiveUnitAllocation([
 ]);
 assert.deepEqual(downPlacedFamily.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 13, 0, 0, 0, 0]);
 assert.equal(Number(downPlacedFamily.effectiveWan.toFixed(1)), 143);
+assert.equal(Number(downPlacedFamily.rawWan.toFixed(1)), 187);
+
+const ethnicOnlyOne = analyze(unitState({ 5: "1" }));
+assert.equal(Number(ethnicOnlyOne.leaderScoreWan.toFixed(1)), 880);
+assert.deepEqual(ethnicOnlyOne.unitAllocation.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 13, 13, 5.125, 0, 0]);
+assert.deepEqual(ethnicOnlyOne.phaseRows.map((row) => row.passed), [true, true, true, false, false]);
+assert.equal(ethnicOnlyOne.curr.g.name, "社會關");
 
 const hugePersonalUnits = analyze(unitState({ 0: "2222" }));
 assert.equal(hugePersonalUnits.leaderWan, 28.6);
@@ -181,8 +203,8 @@ assert.equal(case660.leaderCycle.remaining, 33);
 const case660SocialCounts = countProgressForWan(case660.curr.combined, case660.curr.g);
 assert.equal(Number(case660SocialCounts.zhenMing.done.toFixed(1)), 2.7);
 assert.equal(Number(case660SocialCounts.zhenMing.missing.toFixed(1)), 0.3);
-assert.equal(Number(case660SocialCounts.zhenZheng.done.toFixed(1)), 2.7);
-assert.equal(Number(case660SocialCounts.zhenZheng.missing.toFixed(1)), 10.3);
+assert.equal(Number(case660SocialCounts.zhenZheng.done.toFixed(1)), 0);
+assert.equal(Number(case660SocialCounts.zhenZheng.missing.toFixed(1)), 10);
 
 const case880 = analyze(state(880, [2.2, 2.2, 2.2]));
 assert.equal(case880.curr.status, "at_zm");
@@ -278,8 +300,8 @@ assert.deepEqual(GATES.map((gate) => gate.base), [2.2, 8.8, 22, 88, 220, 880, 22
 assert.deepEqual(GATES.map((gate) => Number(gate.trueWan.toFixed(1))), [28.6, 114.4, 286, 1144, 2860, 11440, 28600, 114400, 286000, 1144000]);
 assert.deepEqual(GATES.map((gate) => Number(gate.cumulativeTrueWan.toFixed(1))), [28.6, 143, 429, 1573, 4433, 15873, 44473, 158873, 444873, 1588873]);
 assert.deepEqual(countProgressForUnits(13).zhenMing, { done: 3, total: 3, missing: 0 });
-assert.deepEqual(countProgressForUnits(13).zhenZheng, { done: 13, total: 13, missing: 0 });
+assert.deepEqual(countProgressForUnits(13).zhenZheng, { done: 10, total: 10, missing: 0 });
 assert.deepEqual(countProgressForUnits(1).zhenMing, { done: 1, total: 3, missing: 2 });
-assert.deepEqual(countProgressForUnits(1).zhenZheng, { done: 1, total: 13, missing: 12 });
+assert.deepEqual(countProgressForUnits(1).zhenZheng, { done: 0, total: 10, missing: 10 });
 
 console.log("calc.test.js passed");
