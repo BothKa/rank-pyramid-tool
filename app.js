@@ -1053,6 +1053,7 @@
       const key = `${scope}-${memberId || "leader"}-${amount.id}`;
 
       input.value = amount.v;
+      input.setAttribute("aria-invalid", amount.v.trim() !== "" && toWan(amount.v) === 0 ? "true" : "false");
       input.dataset.key = key;
       input.dataset.scope = scope;
       input.dataset.amountId = String(amount.id);
@@ -2026,6 +2027,7 @@
       const amount = findAmount(target.dataset.scope, target.dataset.amountId, target.dataset.memberId);
       if (amount) {
         amount.v = target.value;
+        target.setAttribute("aria-invalid", target.value.trim() !== "" && toWan(target.value) === 0 ? "true" : "false");
         scheduleRender();
       }
     }
