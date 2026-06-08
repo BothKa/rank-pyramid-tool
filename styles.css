@@ -171,6 +171,16 @@ input:focus {
   box-shadow: 0 0 0 3px rgba(20, 123, 85, 0.13);
 }
 
+.amount-input[aria-invalid="true"] {
+  border-color: #e55c4f;
+  background: #fff5f4;
+}
+
+.amount-input[aria-invalid="true"]:focus {
+  border-color: #e55c4f;
+  box-shadow: 0 0 0 3px rgba(229, 92, 79, 0.15);
+}
+
 .amount-list {
   display: grid;
   gap: 8px;
