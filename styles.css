@@ -194,6 +194,16 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(20, 123, 85, 0.13);
 }
 
+.amount-input[aria-invalid="true"] {
+  border-color: #e55c4f;
+  background: #fff5f4;
+}
+
+.amount-input[aria-invalid="true"]:focus {
+  border-color: #e55c4f;
+  box-shadow: 0 0 0 3px rgba(229, 92, 79, 0.15);
+}
+
 .control-panel {
   border: 1px solid rgba(120, 105, 80, 0.2);
   border-radius: 8px;
