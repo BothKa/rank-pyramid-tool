@@ -964,6 +964,7 @@
     leaderUnitCounts: document.getElementById("leaderUnitCounts"),
     members: document.getElementById("members"),
     statusOverview: document.getElementById("statusOverview"),
+    focusPanel: document.getElementById("focusPanel"),
     summary: document.getElementById("summary"),
     mobileStatus: document.getElementById("mobileStatus"),
     phaseLights: document.getElementById("phaseLights"),
@@ -1050,6 +1051,7 @@
     const result = analyze(currentAnalysisState());
     document.body.dataset.viewMode = result.settings.viewMode;
     renderStatusOverview(result);
+    renderFocusPanel(result);
     renderSummary(result);
     renderPhaseLights(result);
     renderGateUnitOverview(result);
@@ -1334,6 +1336,43 @@
         <span>${escapeHtml(focus.badge)}</span>
         <strong>${escapeHtml(focus.value)}</strong>
         <small>${escapeHtml(focus.note)}</small>
+      </div>
+    `;
+  }
+
+  function renderFocusPanel(result) {
+    if (!els.focusPanel) return;
+
+    const guidance = phaseTargetGuidance(result);
+    const passText = `${phasePassCount(result)}/${result.phaseRows.length} 段 PASS`;
+    const scoreWan = result.leaderScoreWan ?? result.leaderWan ?? 0;
+    const effectiveWan = result.leaderWan || 0;
+    const hasStarted = scoreWan > EPSILON;
+    const title = hasStarted
+      ? `${phaseFocusText(result)}｜${passText}`
+      : "尚未開始｜等待區間成績";
+    const subtitle = hasStarted
+      ? phaseFocusSubText(result)
+      : "先填入任一區間成績，系統會自動下放補低階並更新狀態。";
+    const scoreNote = Math.abs(scoreWan - effectiveWan) > EPSILON
+      ? `有效配置 ${fmt(effectiveWan)}`
+      : "下放後等值";
+
+    els.focusPanel.innerHTML = `
+      <span class="status-kicker">目前重點</span>
+      <h2 id="focusHeading">${escapeHtml(title)}</h2>
+      <p>${escapeHtml(subtitle)}</p>
+      <div class="focus-meta">
+        <span>
+          <b>總成績</b>
+          <strong>${escapeHtml(fmt(scoreWan))}</strong>
+          <small>${escapeHtml(scoreNote)}</small>
+        </span>
+        <span>
+          <b>下一步</b>
+          <strong>${escapeHtml(guidance.value)}</strong>
+          <small>${escapeHtml(guidance.note)}</small>
+        </span>
       </div>
     `;
   }
@@ -1821,6 +1860,69 @@
     return `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(sub)}</small></div>`;
   }
 
+  function buildShareText(result) {
+    const guidance = phaseTargetGuidance(result);
+    const scoreWan = result.leaderScoreWan ?? result.leaderWan ?? 0;
+    const effectiveWan = result.leaderWan || 0;
+    const scoreNote = Math.abs(scoreWan - effectiveWan) > EPSILON
+      ? `，有效配置 ${fmt(effectiveWan)}`
+      : "";
+    return [
+      "六丼定位結果",
+      `目前：${phaseFocusText(result)}`,
+      `段數：${phasePassCount(result)}/${result.phaseRows.length} 段 PASS`,
+      `總成績：${fmt(scoreWan)}${scoreNote}`,
+      `下一步：${guidance.value}`,
+      guidance.note
+    ].filter(Boolean).join("\n");
+  }
+
+  function copyCurrentResult(button) {
+    const result = analyze(currentAnalysisState());
+    const text = buildShareText(result);
+    const originalText = button.textContent;
+    const markDone = (ok) => {
+      button.textContent = ok ? "已複製" : "無法複製";
+      window.setTimeout(() => {
+        button.textContent = originalText;
+      }, 1200);
+    };
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => markDone(true))
+        .catch(() => markDone(fallbackCopyText(text)));
+      return;
+    }
+
+    markDone(fallbackCopyText(text));
+  }
+
+  function fallbackCopyText(text) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.inset = "0 auto auto 0";
+    textarea.style.opacity = "0";
+    document.body.append(textarea);
+    textarea.select();
+    let copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } catch (error) {
+      copied = false;
+    }
+    textarea.remove();
+    return copied;
+  }
+
+  function clearLeaderInputs() {
+    state.leader.rangeScores = PRIMARY_GATES.map((gate) => ({ gateIdx: gate.idx, v: "" }));
+    state.leader.unitCounts = unitCountsFromRangeScores(state.leader.rangeScores);
+    state.leader.amounts = leaderAmountsFromUnitCounts(state.leader.unitCounts);
+  }
+
   function pct(value, total) {
     if (!total || total <= 0) return 0;
     return Math.round(Math.max(0, Math.min(1, value / total)) * 100);
@@ -2223,6 +2325,17 @@
     const action = button.dataset.action;
     if (action === "add-member") {
       addMember();
+      scheduleRender({ inputs: true });
+      return;
+    }
+
+    if (action === "copy-result") {
+      copyCurrentResult(button);
+      return;
+    }
+
+    if (action === "clear-inputs") {
+      clearLeaderInputs();
       scheduleRender({ inputs: true });
       return;
     }

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>六丼定位系統</title>
-    <link rel="stylesheet" href="./styles.css?v=20260613-range-downflow" />
+    <link rel="stylesheet" href="./styles.css?v=20260613-focus-panel" />
   </head>
   <body>
     <main class="app-shell">
@@ -107,6 +107,17 @@
 
         <section class="output-panel">
           <section class="status-overview" id="statusOverview" aria-live="polite"></section>
+          <section class="focus-panel" aria-labelledby="focusHeading">
+            <div class="focus-copy" id="focusPanel" aria-live="polite">
+              <span class="status-kicker">目前重點</span>
+              <h2 id="focusHeading">等待輸入</h2>
+              <p>輸入區間成績後，這裡會顯示下一步。</p>
+            </div>
+            <div class="focus-actions" aria-label="結果操作">
+              <button class="ghost-button" data-action="copy-result" type="button">複製結果</button>
+              <button class="ghost-button" data-action="clear-inputs" type="button">清空</button>
+            </div>
+          </section>
           <div class="result-strip" id="summary" hidden></div>
 
           <section class="phase-panel" aria-labelledby="phaseHeading">
@@ -119,16 +130,14 @@
             <div class="phase-lights" id="phaseLights"></div>
           </section>
 
-          <section class="journey-panel" aria-labelledby="journeyHeading">
-            <div class="section-title plain">
-              <div>
-                <p class="eyebrow">丼級階梯</p>
-                <h2 id="journeyHeading">下一步一眼看懂</h2>
-              </div>
-            </div>
+          <details class="journey-panel" aria-labelledby="journeyHeading">
+            <summary class="detail-summary">
+              <span id="journeyHeading">關卡階梯明細</span>
+              <small>展開看原始單位與百分比</small>
+            </summary>
             <div class="gate-unit-overview" id="gateUnitOverview" aria-label="目前各關實際單位"></div>
             <div class="gate-stepper" id="gateStepper"></div>
-          </section>
+          </details>
 
           <section class="decision-grid" hidden>
             <article class="action-panel" aria-labelledby="actionHeading">
@@ -258,6 +267,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260613-range-downflow"></script>
+    <script src="./app.js?v=20260613-focus-panel"></script>
   </body>
 </html>
