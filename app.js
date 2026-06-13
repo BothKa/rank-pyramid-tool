@@ -6,12 +6,12 @@
   const TRUE_CLEAR_UNITS = ZHEN_MING_UNITS + ZHEN_ZHENG_UNITS;
   let cumulativeTrueWan = 0;
   const GATES = [
-    { idx: 0, name: "個人關", base: 2.2, col: "#e74c3c", bg: "#fff5f5" },
-    { idx: 1, name: "家庭關", base: 8.8, col: "#e67e22", bg: "#fff8f0" },
-    { idx: 2, name: "事業關", base: 22, col: "#f39c12", bg: "#fffde7" },
-    { idx: 3, name: "社會關", base: 88, col: "#27ae60", bg: "#f0fff4" },
-    { idx: 4, name: "國家關", base: 220, col: "#16a085", bg: "#e8fffe" },
-    { idx: 5, name: "民族關", base: 880, col: "#2980b9", bg: "#eef6ff" },
+    { idx: 0, name: "111丼", base: 2.2, col: "#e74c3c", bg: "#fff5f5" },
+    { idx: 1, name: "222丼", base: 8.8, col: "#e67e22", bg: "#fff8f0" },
+    { idx: 2, name: "333丼", base: 22, col: "#f39c12", bg: "#fffde7" },
+    { idx: 3, name: "444丼", base: 88, col: "#27ae60", bg: "#f0fff4" },
+    { idx: 4, name: "555丼", base: 220, col: "#16a085", bg: "#e8fffe" },
+    { idx: 5, name: "666丼", base: 880, col: "#2980b9", bg: "#eef6ff" },
     { idx: 6, name: "世界關", base: 2200, col: "#8e44ad", bg: "#f8f0ff" },
     { idx: 7, name: "世族關", base: 8800, col: "#c0392b", bg: "#fff0f0" },
     { idx: 8, name: "太空關", base: 22000, col: "#d35400", bg: "#fff4ec" },
@@ -121,8 +121,22 @@
     settings: { ...DEFAULT_SETTINGS, selectedMemberId: null },
     leader: {
       name: "隊長",
-      unitCounts: unitCountsFromWan(660),
-      amounts: [{ id: 1, v: "660" }]
+      unitCounts: unitCountsFromAmounts([
+        { id: 1, v: "2.2" },
+        { id: 2, v: "8.8" },
+        { id: 3, v: "22" },
+        { id: 4, v: "88" },
+        { id: 5, v: "220" },
+        { id: 6, v: "880" }
+      ]),
+      amounts: [
+        { id: 1, v: "2.2" },
+        { id: 2, v: "8.8" },
+        { id: 3, v: "22" },
+        { id: 4, v: "88" },
+        { id: 5, v: "220" },
+        { id: 6, v: "880" }
+      ]
     },
     members: []
   };
@@ -201,6 +215,16 @@
     return result;
   }
 
+  function primaryGateForWan(wan) {
+    if (wan < PRIMARY_GATES[0].base) return null;
+    let result = null;
+    for (const gate of PRIMARY_GATES) {
+      if (wan >= gate.base) result = gate;
+      else break;
+    }
+    return result;
+  }
+
   function teamTierFor(n) {
     return TEAM_TIERS.find((tier) => n >= tier.min && n <= tier.max) || null;
   }
@@ -231,30 +255,12 @@
       const item = ensuredCounts.find((candidate) => Number(candidate.gateIdx) === gate.idx);
       return toCount(item?.v);
     });
-    const effectiveCounts = Array(PRIMARY_GATES.length).fill(0);
+    const effectiveCounts = rawCounts.map((units) => Math.min(TRUE_CLEAR_UNITS, Math.max(0, units)));
     const rawWan = rawCounts.reduce((sum, units, index) => sum + units * PRIMARY_GATES[index].base, 0);
-    let overflowWan = 0;
-
-    rawCounts.forEach((sourceUnits, sourceIndex) => {
-      let availableWan = sourceUnits * PRIMARY_GATES[sourceIndex].base;
-      if (availableWan <= EPSILON) return;
-
-      for (let targetIndex = 0; targetIndex <= sourceIndex && availableWan > EPSILON; targetIndex += 1) {
-        const targetGate = PRIMARY_GATES[targetIndex];
-        const capacityUnits = Math.max(0, TRUE_CLEAR_UNITS - effectiveCounts[targetIndex]);
-        if (capacityUnits <= EPSILON) continue;
-
-        const fillUnits = Math.min(capacityUnits, availableWan / targetGate.base);
-        effectiveCounts[targetIndex] += fillUnits;
-        availableWan -= fillUnits * targetGate.base;
-      }
-
-      overflowWan += Math.max(0, availableWan);
-    });
-
     const effectiveWan = effectiveCounts.reduce((sum, units, index) => {
       return sum + units * PRIMARY_GATES[index].base;
     }, 0);
+    const overflowWan = Math.max(0, rawWan - effectiveWan);
 
     return {
       rawCounts,
@@ -263,6 +269,21 @@
       effectiveWan,
       overflowWan
     };
+  }
+
+  function unitCountsFromAmounts(amounts) {
+    const counts = PRIMARY_GATES.map((gate) => ({ gateIdx: gate.idx, count: 0 }));
+    ensureAmounts(amounts).forEach((amount) => {
+      const gate = primaryGateForWan(toWan(amount.v));
+      if (!gate) return;
+      const item = counts.find((candidate) => candidate.gateIdx === gate.idx);
+      if (item) item.count += 1;
+    });
+
+    return counts.map((item) => ({
+      gateIdx: item.gateIdx,
+      v: item.count > 0 ? String(item.count) : ""
+    }));
   }
 
   function unitCountsFromWan(wan) {
@@ -674,11 +695,11 @@
         rem: leaderUnits * gate.base,
         pct: targetTotal > 0 ? combined / targetTotal : 0
       });
-      break;
     }
 
-    const last = steps.filter((step) => step.status === "cleared" || step.status === "covered").at(-1);
-    const curr = steps.find((step) => step.status === "at_zm" || step.status === "wip");
+    const activeSteps = steps.filter((step) => (step.totalUnits || 0) > EPSILON);
+    const last = activeSteps.filter((step) => step.status === "cleared" || step.status === "covered").at(-1) || null;
+    const curr = activeSteps.filter((step) => step.status === "at_zm" || step.status === "wip").at(-1) || null;
     return { steps, last, curr, leaderWan, tc };
   }
 
@@ -809,6 +830,7 @@
     toWan,
     toCount,
     gateFor,
+    primaryGateForWan,
     teamTierFor,
     maxWanOf,
     sumWanOf,
@@ -816,6 +838,7 @@
     leaderTotalWanFromUnitCounts,
     rawLeaderTotalWanFromUnitCounts,
     effectiveUnitAllocation,
+    unitCountsFromAmounts,
     unitCountsFromWan,
     leaderAmountsFromUnitCounts,
     countProgressForUnits,
@@ -896,8 +919,12 @@
     clean.leader = clean.leader || cloneState(DEFAULT_STATE.leader);
     clean.leader.name = clean.leader.name || "隊長";
     clean.leader.amounts = ensureAmounts(clean.leader.amounts);
-    clean.leader.unitCounts = ensureUnitCounts(clean.leader.unitCounts, clean.leader.amounts);
-    clean.leader.amounts = leaderAmountsFromUnitCounts(clean.leader.unitCounts);
+    if (clean.leader.amounts.some((amount) => toWan(amount.v) > EPSILON)) {
+      clean.leader.unitCounts = unitCountsFromAmounts(clean.leader.amounts);
+    } else {
+      clean.leader.unitCounts = ensureUnitCounts(clean.leader.unitCounts, clean.leader.amounts);
+      clean.leader.amounts = leaderAmountsFromUnitCounts(clean.leader.unitCounts);
+    }
     clean.members = (clean.members || []).slice(0, 13).map((member, index) => ({
       id: member.id || Date.now() + index,
       name: member.name || `隊員 ${index + 1}`,
@@ -965,6 +992,7 @@
       teamCycleBasis: "amount",
       selectedMemberId: null
     };
+    next.leader.unitCounts = unitCountsFromAmounts(next.leader.amounts);
     next.leader.amounts = leaderAmountsFromUnitCounts(next.leader.unitCounts);
     return next;
   }
@@ -974,6 +1002,9 @@
     if (document.activeElement !== els.leaderName) {
       els.leaderName.value = state.leader.name;
     }
+    state.leader.amounts = ensureAmounts(state.leader.amounts);
+    state.leader.unitCounts = unitCountsFromAmounts(state.leader.amounts);
+    if (els.leaderAmounts) renderAmountList(els.leaderAmounts, state.leader.amounts, "leader");
     renderLeaderUnitCounts();
     renderMemberList();
   }
@@ -1000,44 +1031,27 @@
 
   function renderLeaderUnitCounts() {
     if (!els.leaderUnitCounts) return;
-    state.leader.unitCounts = ensureUnitCounts(state.leader.unitCounts, state.leader.amounts);
-
-    const active = document.activeElement;
-    const activeKey = active?.dataset?.key;
+    state.leader.unitCounts = unitCountsFromAmounts(state.leader.amounts);
     els.leaderUnitCounts.replaceChildren();
 
     state.leader.unitCounts.forEach((item) => {
       const gate = GATES.find((candidate) => candidate.idx === Number(item.gateIdx));
       if (!gate) return;
 
-      const label = document.createElement("label");
-      const key = `leader-unit-${gate.idx}`;
-      label.className = "unit-count-field";
-      label.innerHTML = `
+      const card = document.createElement("article");
+      const units = toCount(item.v);
+      const countState = countProgressForUnits(units);
+      card.className = "unit-count-field is-readonly";
+      card.style.setProperty("--gate-color", gate.col);
+      card.innerHTML = `
         <span>${escapeHtml(gate.name.replace("關", ""))}</span>
         <small>${escapeHtml(fmt(gate.base))} / 單位</small>
+        <strong>${escapeHtml(fmtCount(units))}<small>個</small></strong>
+        <em>真命 ${escapeHtml(fmtCount(countState.zhenMing.done))}/${ZHEN_MING_UNITS}・真正補修 ${escapeHtml(fmtCount(countState.zhenZheng.done))}/${ZHEN_ZHENG_UNITS}</em>
       `;
 
-      const input = document.createElement("input");
-      input.type = "text";
-      input.inputMode = "decimal";
-      input.placeholder = "0";
-      input.value = item.v;
-      input.dataset.key = key;
-      input.dataset.leaderUnit = String(gate.idx);
-      input.setAttribute("aria-label", `${gate.name}${fmt(gate.base)}單位數`);
-
-      label.append(input);
-      els.leaderUnitCounts.append(label);
+      els.leaderUnitCounts.append(card);
     });
-
-    if (activeKey) {
-      const restored = els.leaderUnitCounts.querySelector(`input[data-key="${cssEscape(activeKey)}"]`);
-      if (restored) {
-        restored.focus();
-        setCursorToEnd(restored);
-      }
-    }
   }
 
   function renderAmountList(container, amounts, scope, memberId) {
@@ -1197,18 +1211,37 @@
   }
 
   function leaderFocus(result) {
-    const phaseGuidance = phaseTargetGuidance(result);
-    if (phaseGuidance) return phaseGuidance;
+    if (result.curr) {
+      const statusText = {
+        wip: "未達真命",
+        at_zm: "真命過關",
+        cleared: "真正過關",
+        covered: "團隊真正覆蓋"
+      }[result.curr.status] || "進行中";
+      const countState = countProgressForUnits(result.curr.totalUnits ?? result.curr.units ?? 0);
+      return {
+        title: `${result.curr.g.name}・${statusText}`,
+        sub: result.curr.gap > 0
+          ? `還差 ${fmt(result.curr.gap)} 到${result.curr.g.name}${result.curr.target === "zm" ? "真命" : "真正"}`
+          : `${result.curr.g.name}${statusText}`,
+        badge: "目前丼級",
+        value: `${result.curr.g.name}・${statusText}`,
+        note: `真命 ${fmtCount(countState.zhenMing.done)}/${ZHEN_MING_UNITS}・真正補修 ${fmtCount(countState.zhenZheng.done)}/${ZHEN_ZHENG_UNITS}`
+      };
+    }
 
     if (result.last) {
       return {
         title: `${result.last.g.name}・真正過關`,
-        sub: "六大關卡已補足",
-        badge: "六關後餘額",
-        value: fmt(result.last.rem),
-        note: "保留後續使用"
+        sub: "目前最高真正通過",
+        badge: "最高通過",
+        value: result.last.g.name,
+        note: "真正過關"
       };
     }
+
+    const phaseGuidance = phaseTargetGuidance(result);
+    if (phaseGuidance) return phaseGuidance;
 
     return {
       title: "尚未定位",
@@ -2028,6 +2061,10 @@
       if (amount) {
         amount.v = target.value;
         target.setAttribute("aria-invalid", target.value.trim() !== "" && toWan(target.value) === 0 ? "true" : "false");
+        if (target.dataset.scope === "leader") {
+          state.leader.unitCounts = unitCountsFromAmounts(state.leader.amounts);
+          renderLeaderUnitCounts();
+        }
         scheduleRender();
       }
     }

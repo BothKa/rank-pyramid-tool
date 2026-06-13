@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>六大關卡定位系統</title>
-    <link rel="stylesheet" href="./styles.css?v=20260607-raw-units" />
+    <title>六丼定位系統</title>
+    <link rel="stylesheet" href="./styles.css?v=20260613-don-levels" />
   </head>
   <body>
     <main class="app-shell">
@@ -12,8 +12,8 @@
         <aside class="input-panel">
           <div class="panel-head">
             <div>
-              <p class="eyebrow">六大關卡</p>
-              <h1>關卡階梯</h1>
+              <p class="eyebrow">六丼計算</p>
+              <h1>丼級階梯</h1>
             </div>
             <button class="ghost-button" id="resetExample" type="button">範例</button>
           </div>
@@ -74,16 +74,31 @@
               </div>
             </section>
 
-            <section class="form-section leader-edit" aria-label="關卡單位輸入">
+            <section class="form-section leader-edit" aria-labelledby="leaderHeading">
               <div class="section-title" hidden>
-                <h2 id="leaderHeading">隊長</h2>
+                <h2 id="leaderHeading">本人金額</h2>
               </div>
               <label class="field-label" hidden>
                 <span>姓名</span>
                 <input id="leaderName" name="leaderName" type="text" />
               </label>
-              <div class="leader-unit-grid" id="leaderUnitCounts"></div>
-              <div class="amount-list" id="leaderAmounts" hidden></div>
+              <div class="amount-list" id="leaderAmounts"></div>
+              <button class="ghost-button add-amount-button" data-action="add-leader-amount" type="button">新增金額</button>
+
+              <div class="formula-panel" aria-label="丼級計算式">
+                <strong>計算式</strong>
+                <span>2.2萬～未滿 8.8萬 = 111丼</span>
+                <span>8.8萬～未滿 22萬 = 222丼</span>
+                <span>22萬～未滿 88萬 = 333丼</span>
+                <span>88萬～未滿 220萬 = 444丼</span>
+                <span>220萬～未滿 880萬 = 555丼</span>
+                <span>880萬以上 = 666丼</span>
+              </div>
+
+              <div class="section-title unit-result-title">
+                <h2>自動計算</h2>
+              </div>
+              <div class="leader-unit-grid" id="leaderUnitCounts" aria-live="polite"></div>
             </section>
 
             <aside class="mobile-status" id="mobileStatus" aria-live="polite"></aside>
@@ -115,7 +130,7 @@
           <section class="journey-panel" aria-labelledby="journeyHeading">
             <div class="section-title plain">
               <div>
-                <p class="eyebrow">關卡階梯</p>
+                <p class="eyebrow">丼級階梯</p>
                 <h2 id="journeyHeading">下一步一眼看懂</h2>
               </div>
             </div>
@@ -251,6 +266,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260607-raw-units"></script>
+    <script src="./app.js?v=20260613-don-levels"></script>
   </body>
 </html>

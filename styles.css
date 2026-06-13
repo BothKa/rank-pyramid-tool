@@ -285,6 +285,40 @@ body[data-view-mode="member"] .team-edit {
   gap: 8px;
 }
 
+.add-amount-button {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.formula-panel {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  border: 1px solid rgba(164, 93, 48, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 248, 232, 0.9), rgba(255, 255, 255, 0.72)),
+    #ffffff;
+  padding: 10px;
+}
+
+.formula-panel strong {
+  color: var(--copper);
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.formula-panel span {
+  color: var(--muted);
+  font-size: 0.73rem;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.unit-result-title {
+  margin-top: 14px;
+}
+
 .leader-unit-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -313,6 +347,36 @@ body[data-view-mode="member"] .team-edit {
   font-size: 0.7rem;
   font-weight: 850;
   line-height: 1.2;
+}
+
+.unit-count-field.is-readonly {
+  border-color: color-mix(in srgb, var(--gate-color), #ffffff 72%);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--gate-color), #ffffff 93%), rgba(255, 255, 255, 0.88)),
+    #ffffff;
+}
+
+.unit-count-field.is-readonly strong {
+  display: block;
+  color: var(--ink);
+  font-size: 1.35rem;
+  font-weight: 950;
+  line-height: 1.05;
+}
+
+.unit-count-field.is-readonly strong small {
+  margin-left: 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.unit-count-field.is-readonly em {
+  color: color-mix(in srgb, var(--gate-color), #20242a 28%);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.25;
 }
 
 .unit-count-field input {
