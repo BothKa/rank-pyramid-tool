@@ -117,6 +117,7 @@
     settings: { ...DEFAULT_SETTINGS, selectedMemberId: 1 },
     leader: {
       name: "隊長",
+      rangeScores: PRIMARY_GATES.map((gate) => ({ gateIdx: gate.idx, v: "" })),
       unitCounts: PRIMARY_GATES.map((gate) => ({ gateIdx: gate.idx, v: "" })),
       amounts: [{ id: 1, v: "" }]
     },
@@ -127,6 +128,14 @@
     settings: { ...DEFAULT_SETTINGS, selectedMemberId: null },
     leader: {
       name: "隊長",
+      rangeScores: [
+        { gateIdx: 0, v: "2.2" },
+        { gateIdx: 1, v: "8.8" },
+        { gateIdx: 2, v: "22" },
+        { gateIdx: 3, v: "88" },
+        { gateIdx: 4, v: "220" },
+        { gateIdx: 5, v: "880" }
+      ],
       unitCounts: unitCountsFromAmounts([
         { id: 1, v: "2.2" },
         { id: 2, v: "8.8" },
@@ -255,6 +264,30 @@
     }, 0);
   }
 
+  function rangeScoresFromUnitCounts(unitCounts, fallbackAmounts) {
+    const ensuredCounts = ensureUnitCounts(unitCounts, fallbackAmounts);
+    return PRIMARY_GATES.map((gate) => {
+      const item = ensuredCounts.find((candidate) => Number(candidate.gateIdx) === gate.idx);
+      const score = toCount(item?.v) * gate.base;
+      return {
+        gateIdx: gate.idx,
+        v: score > EPSILON ? fmtScoreInput(score) : ""
+      };
+    });
+  }
+
+  function unitCountsFromRangeScores(rangeScores) {
+    const ensuredScores = ensureRangeScores(rangeScores);
+    return PRIMARY_GATES.map((gate) => {
+      const item = ensuredScores.find((candidate) => Number(candidate.gateIdx) === gate.idx);
+      const units = toWan(item?.v) / gate.base;
+      return {
+        gateIdx: gate.idx,
+        v: units > EPSILON ? fmtUnitInput(units) : ""
+      };
+    });
+  }
+
   function effectiveUnitAllocation(unitCounts) {
     const ensuredCounts = ensureUnitCounts(unitCounts);
     const rawCounts = PRIMARY_GATES.map((gate) => {
@@ -320,6 +353,32 @@
         v: item?.v ?? ""
       };
     });
+  }
+
+  function ensureRangeScores(rangeScores, fallbackUnitCounts, fallbackAmounts) {
+    if (Array.isArray(rangeScores) && rangeScores.length > 0) {
+      const byGate = new Map(rangeScores.map((item) => [Number(item.gateIdx), item]));
+      return PRIMARY_GATES.map((gate) => {
+        const item = byGate.get(gate.idx);
+        return {
+          gateIdx: gate.idx,
+          v: item?.v ?? ""
+        };
+      });
+    }
+
+    const ensuredAmounts = ensureAmounts(fallbackAmounts);
+    const hasUserAmountInputs = ensuredAmounts.some((amount) => toWan(amount.v) > EPSILON)
+      && !(ensuredAmounts.length === 1 && ensuredAmounts[0].id === "leader-unit-total");
+    if (hasUserAmountInputs) {
+      return rangeScoresFromUnitCounts(unitCountsFromAmounts(ensuredAmounts));
+    }
+
+    if (hasUnitCountValue(fallbackUnitCounts)) {
+      return ensureUnitCounts(fallbackUnitCounts, fallbackAmounts);
+    }
+
+    return PRIMARY_GATES.map((gate) => ({ gateIdx: gate.idx, v: "" }));
   }
 
   function leaderAmountsFromUnitCounts(unitCounts) {
@@ -848,6 +907,8 @@
     unitCountsFromAmounts,
     unitCountsFromWan,
     leaderAmountsFromUnitCounts,
+    rangeScoresFromUnitCounts,
+    unitCountsFromRangeScores,
     countProgressForUnits,
     countProgressForWan,
     phaseStatusFor,
@@ -926,16 +987,9 @@
     clean.leader = clean.leader || cloneState(DEFAULT_STATE.leader);
     clean.leader.name = clean.leader.name || "隊長";
     clean.leader.amounts = ensureAmounts(clean.leader.amounts);
-    if (hasUnitCountValue(clean.leader.unitCounts)) {
-      clean.leader.unitCounts = ensureUnitCounts(clean.leader.unitCounts, clean.leader.amounts);
-      clean.leader.amounts = leaderAmountsFromUnitCounts(clean.leader.unitCounts);
-    } else if (clean.leader.amounts.some((amount) => toWan(amount.v) > EPSILON)) {
-      clean.leader.unitCounts = unitCountsFromAmounts(clean.leader.amounts);
-      clean.leader.amounts = leaderAmountsFromUnitCounts(clean.leader.unitCounts);
-    } else {
-      clean.leader.unitCounts = ensureUnitCounts(clean.leader.unitCounts, clean.leader.amounts);
-      clean.leader.amounts = leaderAmountsFromUnitCounts(clean.leader.unitCounts);
-    }
+    clean.leader.rangeScores = ensureRangeScores(clean.leader.rangeScores, clean.leader.unitCounts, clean.leader.amounts);
+    clean.leader.unitCounts = unitCountsFromRangeScores(clean.leader.rangeScores);
+    clean.leader.amounts = leaderAmountsFromUnitCounts(clean.leader.unitCounts);
     clean.members = (clean.members || []).slice(0, 13).map((member, index) => ({
       id: member.id || Date.now() + index,
       name: member.name || `隊員 ${index + 1}`,
@@ -1007,7 +1061,8 @@
       teamCycleBasis: "amount",
       selectedMemberId: null
     };
-    next.leader.unitCounts = ensureUnitCounts(next.leader.unitCounts, next.leader.amounts);
+    next.leader.rangeScores = ensureRangeScores(next.leader.rangeScores, next.leader.unitCounts, next.leader.amounts);
+    next.leader.unitCounts = unitCountsFromRangeScores(next.leader.rangeScores);
     next.leader.amounts = leaderAmountsFromUnitCounts(next.leader.unitCounts);
     return next;
   }
@@ -1017,7 +1072,8 @@
     if (document.activeElement !== els.leaderName) {
       els.leaderName.value = state.leader.name;
     }
-    state.leader.unitCounts = ensureUnitCounts(state.leader.unitCounts, state.leader.amounts);
+    state.leader.rangeScores = ensureRangeScores(state.leader.rangeScores, state.leader.unitCounts, state.leader.amounts);
+    state.leader.unitCounts = unitCountsFromRangeScores(state.leader.rangeScores);
     state.leader.amounts = leaderAmountsFromUnitCounts(state.leader.unitCounts);
     renderLeaderRangeCounts();
     renderLeaderUnitCounts();
@@ -1046,7 +1102,8 @@
 
   function renderLeaderUnitCounts() {
     if (!els.leaderUnitCounts) return;
-    state.leader.unitCounts = ensureUnitCounts(state.leader.unitCounts, state.leader.amounts);
+    state.leader.rangeScores = ensureRangeScores(state.leader.rangeScores, state.leader.unitCounts, state.leader.amounts);
+    state.leader.unitCounts = unitCountsFromRangeScores(state.leader.rangeScores);
     els.leaderUnitCounts.replaceChildren();
 
     state.leader.unitCounts.forEach((item) => {
@@ -1074,11 +1131,11 @@
 
     const active = document.activeElement;
     const activeKey = active?.dataset?.key;
-    state.leader.unitCounts = ensureUnitCounts(state.leader.unitCounts, state.leader.amounts);
+    state.leader.rangeScores = ensureRangeScores(state.leader.rangeScores, state.leader.unitCounts, state.leader.amounts);
     els.leaderRangeCounts.replaceChildren();
 
     DON_RANGES.forEach(({ gate, label }) => {
-      const item = state.leader.unitCounts.find((unit) => Number(unit.gateIdx) === gate.idx);
+      const item = state.leader.rangeScores.find((score) => Number(score.gateIdx) === gate.idx);
       const key = `leader-range-${gate.idx}`;
       const field = document.createElement("label");
       field.className = "range-count-field";
@@ -1088,11 +1145,12 @@
           <strong>${escapeHtml(label)}</strong>
           <small>${escapeHtml(gate.name)}</small>
         </span>
-        <input inputmode="decimal" type="text" placeholder="0" aria-label="${escapeHtml(`${label} ${gate.name} 數量`)}" />
+        <input inputmode="decimal" type="text" placeholder="0萬" aria-label="${escapeHtml(`${label} ${gate.name} 成績`)}" />
       `;
 
       const input = field.querySelector("input");
       input.value = item?.v || "";
+      input.setAttribute("aria-invalid", input.value.trim() !== "" && toWan(input.value) === 0 ? "true" : "false");
       input.dataset.leaderUnit = String(gate.idx);
       input.dataset.key = key;
       els.leaderRangeCounts.append(field);
@@ -1608,6 +1666,13 @@
     return String(parseFloat(n.toFixed(3)));
   }
 
+  function fmtScoreInput(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return "";
+    if (Math.abs(n - Math.round(n)) < 0.001) return String(Math.round(n));
+    return String(parseFloat(n.toFixed(3)));
+  }
+
   function memberGateState(gate, selectedIdx) {
     if (selectedIdx < 0) return { className: "is-locked", label: "未觸及", zmPct: 0, zzPct: 0 };
     if (gate.idx < selectedIdx) return { className: "is-cleared", label: "已觸及", zmPct: 100, zzPct: 100 };
@@ -2099,10 +2164,12 @@
     if (target.tagName !== "INPUT") return;
 
     if (target.matches("[data-leader-unit]")) {
-      state.leader.unitCounts = ensureUnitCounts(state.leader.unitCounts, state.leader.amounts);
-      const item = state.leader.unitCounts.find((unit) => String(unit.gateIdx) === String(target.dataset.leaderUnit));
+      state.leader.rangeScores = ensureRangeScores(state.leader.rangeScores, state.leader.unitCounts, state.leader.amounts);
+      const item = state.leader.rangeScores.find((score) => String(score.gateIdx) === String(target.dataset.leaderUnit));
       if (item) {
         item.v = target.value;
+        target.setAttribute("aria-invalid", target.value.trim() !== "" && toWan(target.value) === 0 ? "true" : "false");
+        state.leader.unitCounts = unitCountsFromRangeScores(state.leader.rangeScores);
         state.leader.amounts = leaderAmountsFromUnitCounts(state.leader.unitCounts);
         renderLeaderUnitCounts();
         scheduleRender();

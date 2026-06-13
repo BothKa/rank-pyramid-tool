@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const core = require("../app.js");
 
-const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, effectiveUnitAllocation, CYCLES, DON_RANGES, gateFor, GATES, PHASES, PRIMARY_GATES, leaderTotalWanFromUnitCounts, rawLeaderTotalWanFromUnitCounts, maxWanOf, phaseStatusFor, phaseStatusForUnitCounts, primaryGateForWan, teamTierFor, toWan, unitCountsFromAmounts, unitCountsFromWan } = core;
+const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, effectiveUnitAllocation, CYCLES, DON_RANGES, gateFor, GATES, PHASES, PRIMARY_GATES, leaderTotalWanFromUnitCounts, rawLeaderTotalWanFromUnitCounts, maxWanOf, phaseStatusFor, phaseStatusForUnitCounts, primaryGateForWan, teamTierFor, toWan, unitCountsFromAmounts, unitCountsFromRangeScores, unitCountsFromWan } = core;
 
 function state(leaderAmount, memberAmounts = []) {
   return {
@@ -88,6 +88,12 @@ assert.deepEqual(unitCountsFromAmounts([
   { v: "880" }
 ]).map((item) => item.v), ["2", "2", "2", "1", "1", "1"]);
 assert.deepEqual(unitCountsFromAmounts([{ v: "660" }]).map((item) => item.v), ["", "", "", "", "1", ""]);
+assert.deepEqual(unitCountsFromRangeScores([{ gateIdx: 0, v: "22" }]).map((item) => item.v), ["10", "", "", "", "", ""]);
+assert.deepEqual(unitCountsFromRangeScores([
+  { gateIdx: 0, v: "6.6" },
+  { gateIdx: 1, v: "44" },
+  { gateIdx: 5, v: "11440" }
+]).map((item) => item.v), ["3", "5", "", "", "", "13"]);
 
 const thirteenSixSixSix = analyze(unitState({ 5: "13" }));
 assert.equal(thirteenSixSixSix.steps[5].g.name, "666丼");
