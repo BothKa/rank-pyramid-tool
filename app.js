@@ -76,6 +76,12 @@
   const EPSILON = 1e-9;
   const PRIMARY_GATE_COUNT = 6;
   const PRIMARY_GATES = GATES.slice(0, PRIMARY_GATE_COUNT);
+  const DON_RANGES = PRIMARY_GATES.map((gate, index) => ({
+    gate,
+    label: PRIMARY_GATES[index + 1]
+      ? `${fmt(gate.base)}～未滿 ${fmt(PRIMARY_GATES[index + 1].base)}`
+      : `${fmt(gate.base)}以上`
+  }));
   let cumulativePhaseWan = 0;
   const PHASES = [
     { idx: 0, name: "第一段數", lowerGate: GATES[0], lowerCount: 13, upperGate: GATES[1], upperCount: 3 },
@@ -818,6 +824,7 @@
   const core = {
     GATES,
     PRIMARY_GATES,
+    DON_RANGES,
     PHASES,
     CYCLES,
     TEAM_TIERS,
@@ -878,8 +885,8 @@
     form: document.getElementById("rankForm"),
     viewerMember: document.getElementById("viewerMember"),
     leaderName: document.getElementById("leaderName"),
+    leaderRangeCounts: document.getElementById("leaderRangeCounts"),
     leaderUnitCounts: document.getElementById("leaderUnitCounts"),
-    leaderAmounts: document.getElementById("leaderAmounts"),
     members: document.getElementById("members"),
     statusOverview: document.getElementById("statusOverview"),
     summary: document.getElementById("summary"),
@@ -919,8 +926,12 @@
     clean.leader = clean.leader || cloneState(DEFAULT_STATE.leader);
     clean.leader.name = clean.leader.name || "隊長";
     clean.leader.amounts = ensureAmounts(clean.leader.amounts);
-    if (clean.leader.amounts.some((amount) => toWan(amount.v) > EPSILON)) {
+    if (hasUnitCountValue(clean.leader.unitCounts)) {
+      clean.leader.unitCounts = ensureUnitCounts(clean.leader.unitCounts, clean.leader.amounts);
+      clean.leader.amounts = leaderAmountsFromUnitCounts(clean.leader.unitCounts);
+    } else if (clean.leader.amounts.some((amount) => toWan(amount.v) > EPSILON)) {
       clean.leader.unitCounts = unitCountsFromAmounts(clean.leader.amounts);
+      clean.leader.amounts = leaderAmountsFromUnitCounts(clean.leader.unitCounts);
     } else {
       clean.leader.unitCounts = ensureUnitCounts(clean.leader.unitCounts, clean.leader.amounts);
       clean.leader.amounts = leaderAmountsFromUnitCounts(clean.leader.unitCounts);
@@ -932,6 +943,10 @@
     }));
     clean.settings = normalizeSettings(clean.settings, clean.members);
     return clean;
+  }
+
+  function hasUnitCountValue(unitCounts) {
+    return Array.isArray(unitCounts) && unitCounts.some((item) => toCount(item?.v) > EPSILON);
   }
 
   function ensureAmounts(amounts) {
@@ -992,7 +1007,7 @@
       teamCycleBasis: "amount",
       selectedMemberId: null
     };
-    next.leader.unitCounts = unitCountsFromAmounts(next.leader.amounts);
+    next.leader.unitCounts = ensureUnitCounts(next.leader.unitCounts, next.leader.amounts);
     next.leader.amounts = leaderAmountsFromUnitCounts(next.leader.unitCounts);
     return next;
   }
@@ -1002,9 +1017,9 @@
     if (document.activeElement !== els.leaderName) {
       els.leaderName.value = state.leader.name;
     }
-    state.leader.amounts = ensureAmounts(state.leader.amounts);
-    state.leader.unitCounts = unitCountsFromAmounts(state.leader.amounts);
-    if (els.leaderAmounts) renderAmountList(els.leaderAmounts, state.leader.amounts, "leader");
+    state.leader.unitCounts = ensureUnitCounts(state.leader.unitCounts, state.leader.amounts);
+    state.leader.amounts = leaderAmountsFromUnitCounts(state.leader.unitCounts);
+    renderLeaderRangeCounts();
     renderLeaderUnitCounts();
     renderMemberList();
   }
@@ -1031,7 +1046,7 @@
 
   function renderLeaderUnitCounts() {
     if (!els.leaderUnitCounts) return;
-    state.leader.unitCounts = unitCountsFromAmounts(state.leader.amounts);
+    state.leader.unitCounts = ensureUnitCounts(state.leader.unitCounts, state.leader.amounts);
     els.leaderUnitCounts.replaceChildren();
 
     state.leader.unitCounts.forEach((item) => {
@@ -1052,6 +1067,44 @@
 
       els.leaderUnitCounts.append(card);
     });
+  }
+
+  function renderLeaderRangeCounts() {
+    if (!els.leaderRangeCounts) return;
+
+    const active = document.activeElement;
+    const activeKey = active?.dataset?.key;
+    state.leader.unitCounts = ensureUnitCounts(state.leader.unitCounts, state.leader.amounts);
+    els.leaderRangeCounts.replaceChildren();
+
+    DON_RANGES.forEach(({ gate, label }) => {
+      const item = state.leader.unitCounts.find((unit) => Number(unit.gateIdx) === gate.idx);
+      const key = `leader-range-${gate.idx}`;
+      const field = document.createElement("label");
+      field.className = "range-count-field";
+      field.style.setProperty("--gate-color", gate.col);
+      field.innerHTML = `
+        <span class="range-count-copy">
+          <strong>${escapeHtml(label)}</strong>
+          <small>${escapeHtml(gate.name)}</small>
+        </span>
+        <input inputmode="decimal" type="text" placeholder="0" aria-label="${escapeHtml(`${label} ${gate.name} 數量`)}" />
+      `;
+
+      const input = field.querySelector("input");
+      input.value = item?.v || "";
+      input.dataset.leaderUnit = String(gate.idx);
+      input.dataset.key = key;
+      els.leaderRangeCounts.append(field);
+    });
+
+    if (activeKey) {
+      const restored = els.leaderRangeCounts.querySelector(`[data-key="${cssEscape(activeKey)}"]`);
+      if (restored) {
+        restored.focus();
+        setCursorToEnd(restored);
+      }
+    }
   }
 
   function renderAmountList(container, amounts, scope, memberId) {
@@ -2051,6 +2104,7 @@
       if (item) {
         item.v = target.value;
         state.leader.amounts = leaderAmountsFromUnitCounts(state.leader.unitCounts);
+        renderLeaderUnitCounts();
         scheduleRender();
       }
       return;
@@ -2083,12 +2137,6 @@
     if (!button) return;
 
     const action = button.dataset.action;
-    if (action === "add-leader-amount") {
-      state.leader.amounts.push({ id: uniqueId(), v: "" });
-      scheduleRender({ inputs: true });
-      return;
-    }
-
     if (action === "add-member") {
       addMember();
       scheduleRender({ inputs: true });

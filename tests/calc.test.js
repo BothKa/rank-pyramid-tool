@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const core = require("../app.js");
 
-const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, effectiveUnitAllocation, CYCLES, gateFor, GATES, PHASES, PRIMARY_GATES, leaderTotalWanFromUnitCounts, rawLeaderTotalWanFromUnitCounts, maxWanOf, phaseStatusFor, phaseStatusForUnitCounts, primaryGateForWan, teamTierFor, toWan, unitCountsFromAmounts, unitCountsFromWan } = core;
+const { analyze, calcCascade, countProgressForUnits, countProgressForWan, cycleStatusFor, cycleStatusForTeamCoverage, effectiveUnitAllocation, CYCLES, DON_RANGES, gateFor, GATES, PHASES, PRIMARY_GATES, leaderTotalWanFromUnitCounts, rawLeaderTotalWanFromUnitCounts, maxWanOf, phaseStatusFor, phaseStatusForUnitCounts, primaryGateForWan, teamTierFor, toWan, unitCountsFromAmounts, unitCountsFromWan } = core;
 
 function state(leaderAmount, memberAmounts = []) {
   return {
@@ -51,6 +51,14 @@ assert.equal(toWan("22000萬"), 22000);
 assert.equal(toWan("-1"), 0);
 
 assert.deepEqual(PRIMARY_GATES.map((gate) => gate.name), ["111丼", "222丼", "333丼", "444丼", "555丼", "666丼"]);
+assert.deepEqual(DON_RANGES.map((range) => [range.label, range.gate.name]), [
+  ["2.2萬～未滿 8.8萬", "111丼"],
+  ["8.8萬～未滿 22萬", "222丼"],
+  ["22萬～未滿 88萬", "333丼"],
+  ["88萬～未滿 220萬", "444丼"],
+  ["220萬～未滿 880萬", "555丼"],
+  ["880萬以上", "666丼"]
+]);
 assert.equal(leaderTotalWanFromUnitCounts([
   { gateIdx: 0, v: "13" },
   { gateIdx: 1, v: "13" },

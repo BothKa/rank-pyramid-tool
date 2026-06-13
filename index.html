@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>六丼定位系統</title>
-    <link rel="stylesheet" href="./styles.css?v=20260613-don-levels" />
+    <link rel="stylesheet" href="./styles.css?v=20260613-range-counts" />
   </head>
   <body>
     <main class="app-shell">
@@ -76,27 +76,19 @@
 
             <section class="form-section leader-edit" aria-labelledby="leaderHeading">
               <div class="section-title" hidden>
-                <h2 id="leaderHeading">本人金額</h2>
+                <h2 id="leaderHeading">本人區間</h2>
               </div>
               <label class="field-label" hidden>
                 <span>姓名</span>
                 <input id="leaderName" name="leaderName" type="text" />
               </label>
-              <div class="amount-list" id="leaderAmounts"></div>
-              <button class="ghost-button add-amount-button" data-action="add-leader-amount" type="button">新增金額</button>
-
-              <div class="formula-panel" aria-label="丼級計算式">
-                <strong>計算式</strong>
-                <span>2.2萬～未滿 8.8萬 = 111丼</span>
-                <span>8.8萬～未滿 22萬 = 222丼</span>
-                <span>22萬～未滿 88萬 = 333丼</span>
-                <span>88萬～未滿 220萬 = 444丼</span>
-                <span>220萬～未滿 880萬 = 555丼</span>
-                <span>880萬以上 = 666丼</span>
+              <div class="section-title range-input-title">
+                <h2>區間數量</h2>
               </div>
+              <div class="range-count-grid" id="leaderRangeCounts" aria-live="polite"></div>
 
               <div class="section-title unit-result-title">
-                <h2>自動計算</h2>
+                <h2>統整結果</h2>
               </div>
               <div class="leader-unit-grid" id="leaderUnitCounts" aria-live="polite"></div>
             </section>
@@ -266,6 +258,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=20260613-don-levels"></script>
+    <script src="./app.js?v=20260613-range-counts"></script>
   </body>
 </html>
