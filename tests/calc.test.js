@@ -94,11 +94,16 @@ assert.deepEqual(unitCountsFromRangeScores([
   { gateIdx: 1, v: "44" },
   { gateIdx: 5, v: "11440" }
 ]).map((item) => item.v), ["3", "5", "", "", "", "13"]);
+assert.deepEqual(
+  effectiveUnitAllocation(unitCountsFromRangeScores([{ gateIdx: 1, v: "88" }])).effectiveCounts.map((count) => Number(count.toFixed(3))),
+  [13, 6.75, 0, 0, 0, 0]
+);
 
 const thirteenSixSixSix = analyze(unitState({ 5: "13" }));
 assert.equal(thirteenSixSixSix.steps[5].g.name, "666丼");
-assert.equal(thirteenSixSixSix.steps[5].status, "cleared");
-assert.equal(thirteenSixSixSix.steps[5].totalUnits, 13);
+assert.equal(thirteenSixSixSix.steps[5].status, "at_zm");
+assert.equal(Number(thirteenSixSixSix.steps[5].totalUnits.toFixed(3)), 7.963);
+assert.equal(Number(thirteenSixSixSix.unitAllocation.effectiveCounts[5].toFixed(3)), 7.963);
 
 const cappedPersonal = effectiveUnitAllocation([{ gateIdx: 0, v: "20" }]);
 assert.deepEqual(cappedPersonal.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 0, 0, 0, 0, 0]);
@@ -107,14 +112,14 @@ assert.equal(Number(cappedPersonal.effectiveWan.toFixed(1)), 28.6);
 
 const familyOnlyThirteen = effectiveUnitAllocation([{ gateIdx: 1, v: "13" }]);
 assert.deepEqual(familyOnlyThirteen.rawCounts.map((count) => Number(count.toFixed(3))), [0, 13, 0, 0, 0, 0]);
-assert.deepEqual(familyOnlyThirteen.effectiveCounts.map((count) => Number(count.toFixed(3))), [0, 13, 0, 0, 0, 0]);
+assert.deepEqual(familyOnlyThirteen.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 9.75, 0, 0, 0, 0]);
 assert.equal(Number(familyOnlyThirteen.effectiveWan.toFixed(1)), 114.4);
 
 const familyThirteenState = analyze(unitState({ 1: "13" }));
 assert.equal(Number(familyThirteenState.leaderScoreWan.toFixed(1)), 114.4);
-assert.deepEqual(familyThirteenState.phaseRows.map((row) => row.passed), [false, false, false, false, false]);
+assert.deepEqual(familyThirteenState.phaseRows.map((row) => row.passed), [true, false, false, false, false]);
 assert.equal(familyThirteenState.phaseRows[0].parts[0].gateName, "111丼");
-assert.equal(familyThirteenState.phaseRows[0].parts[0].missingUnits, 13);
+assert.equal(familyThirteenState.phaseRows[0].parts[0].missingUnits, 0);
 assert.equal(familyThirteenState.phaseRows[0].parts[1].gateName, "222丼");
 assert.equal(familyThirteenState.phaseRows[0].parts[1].missingUnits, 0);
 
@@ -123,15 +128,15 @@ const downPlacedFamily = effectiveUnitAllocation([
   { gateIdx: 1, v: "20" }
 ]);
 assert.deepEqual(downPlacedFamily.rawCounts.map((count) => Number(count.toFixed(3))), [5, 20, 0, 0, 0, 0]);
-assert.deepEqual(downPlacedFamily.effectiveCounts.map((count) => Number(count.toFixed(3))), [5, 13, 0, 0, 0, 0]);
-assert.equal(Number(downPlacedFamily.effectiveWan.toFixed(1)), 125.4);
+assert.deepEqual(downPlacedFamily.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 13, 0, 0, 0, 0]);
+assert.equal(Number(downPlacedFamily.effectiveWan.toFixed(1)), 143);
 assert.equal(Number(downPlacedFamily.rawWan.toFixed(1)), 187);
 
 const ethnicOnlyOne = analyze(unitState({ 5: "1" }));
 assert.equal(Number(ethnicOnlyOne.leaderScoreWan.toFixed(1)), 880);
-assert.deepEqual(ethnicOnlyOne.unitAllocation.effectiveCounts.map((count) => Number(count.toFixed(3))), [0, 0, 0, 0, 0, 1]);
-assert.deepEqual(ethnicOnlyOne.phaseRows.map((row) => row.passed), [false, false, false, false, false]);
-assert.equal(ethnicOnlyOne.curr.g.name, "666丼");
+assert.deepEqual(ethnicOnlyOne.unitAllocation.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 13, 13, 5.125, 0, 0]);
+assert.deepEqual(ethnicOnlyOne.phaseRows.map((row) => row.passed), [true, true, true, false, false]);
+assert.equal(ethnicOnlyOne.curr.g.name, "444丼");
 
 const hugePersonalUnits = analyze(unitState({ 0: "2222" }));
 assert.equal(hugePersonalUnits.leaderWan, 28.6);
@@ -145,15 +150,15 @@ assert.equal(hugePersonalUnits.phaseRows[0].parts[1].gateName, "222丼");
 assert.equal(hugePersonalUnits.phaseRows[0].parts[1].missingUnits, 3);
 
 const personalFiveFamilyTwenty = analyze(unitState({ 0: "5", 1: "20" }));
-assert.equal(Number(personalFiveFamilyTwenty.leaderWan.toFixed(1)), 125.4);
-assert.deepEqual(personalFiveFamilyTwenty.unitAllocation.effectiveCounts.map((count) => Number(count.toFixed(3))), [5, 13, 0, 0, 0, 0]);
-assert.equal(personalFiveFamilyTwenty.steps[0].status, "at_zm");
+assert.equal(Number(personalFiveFamilyTwenty.leaderWan.toFixed(1)), 143);
+assert.deepEqual(personalFiveFamilyTwenty.unitAllocation.effectiveCounts.map((count) => Number(count.toFixed(3))), [13, 13, 0, 0, 0, 0]);
+assert.equal(personalFiveFamilyTwenty.steps[0].status, "cleared");
 assert.equal(personalFiveFamilyTwenty.steps[1].status, "cleared");
-assert.equal(personalFiveFamilyTwenty.curr.g.name, "111丼");
-assert.deepEqual(personalFiveFamilyTwenty.phaseRows.map((row) => row.passed), [false, false, false, false, false]);
-assert.equal(personalFiveFamilyTwenty.phaseRows[0].parts[0].missingUnits, 8);
-assert.equal(personalFiveFamilyTwenty.phaseRows[0].parts[1].gateName, "222丼");
-assert.equal(personalFiveFamilyTwenty.phaseRows[0].parts[1].missingUnits, 0);
+assert.equal(personalFiveFamilyTwenty.curr, null);
+assert.deepEqual(personalFiveFamilyTwenty.phaseRows.map((row) => row.passed), [true, false, false, false, false]);
+assert.equal(personalFiveFamilyTwenty.phaseRows[1].parts[0].missingUnits, 0);
+assert.equal(personalFiveFamilyTwenty.phaseRows[1].parts[1].gateName, "333丼");
+assert.equal(personalFiveFamilyTwenty.phaseRows[1].parts[1].missingUnits, 3);
 
 const unitCounts660 = unitCountsFromWan(660);
 assert.deepEqual(unitCounts660.map((item) => item.v), ["13", "13", "13", "2.625", "", ""]);

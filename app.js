@@ -294,8 +294,22 @@
       const item = ensuredCounts.find((candidate) => Number(candidate.gateIdx) === gate.idx);
       return toCount(item?.v);
     });
-    const effectiveCounts = rawCounts.map((units) => Math.min(TRUE_CLEAR_UNITS, Math.max(0, units)));
+    const effectiveCounts = PRIMARY_GATES.map(() => 0);
     const rawWan = rawCounts.reduce((sum, units, index) => sum + units * PRIMARY_GATES[index].base, 0);
+
+    rawCounts.forEach((sourceUnits, sourceIndex) => {
+      let remainingWan = Math.max(0, sourceUnits) * PRIMARY_GATES[sourceIndex].base;
+      for (let gateIndex = 0; gateIndex <= sourceIndex && remainingWan > EPSILON; gateIndex += 1) {
+        const gate = PRIMARY_GATES[gateIndex];
+        const capacityUnits = Math.max(0, TRUE_CLEAR_UNITS - effectiveCounts[gateIndex]);
+        if (capacityUnits <= EPSILON) continue;
+
+        const usableUnits = Math.min(capacityUnits, remainingWan / gate.base);
+        effectiveCounts[gateIndex] += usableUnits;
+        remainingWan = Math.max(0, remainingWan - usableUnits * gate.base);
+      }
+    });
+
     const effectiveWan = effectiveCounts.reduce((sum, units, index) => {
       return sum + units * PRIMARY_GATES[index].base;
     }, 0);
@@ -1104,6 +1118,7 @@
     if (!els.leaderUnitCounts) return;
     state.leader.rangeScores = ensureRangeScores(state.leader.rangeScores, state.leader.unitCounts, state.leader.amounts);
     state.leader.unitCounts = unitCountsFromRangeScores(state.leader.rangeScores);
+    const allocation = effectiveUnitAllocation(state.leader.unitCounts);
     els.leaderUnitCounts.replaceChildren();
 
     state.leader.unitCounts.forEach((item) => {
@@ -1111,15 +1126,17 @@
       if (!gate) return;
 
       const card = document.createElement("article");
-      const units = toCount(item.v);
+      const rawUnits = allocation.rawCounts[gate.idx] || 0;
+      const units = allocation.effectiveCounts[gate.idx] || 0;
       const countState = countProgressForUnits(units);
+      const rawNote = Math.abs(rawUnits - units) > EPSILON ? `原始 ${fmtCount(rawUnits)}個・` : "";
       card.className = "unit-count-field is-readonly";
       card.style.setProperty("--gate-color", gate.col);
       card.innerHTML = `
         <span>${escapeHtml(gate.name.replace("關", ""))}</span>
-        <small>${escapeHtml(fmt(gate.base))} / 單位</small>
+        <small>${escapeHtml(fmt(gate.base))} / 下放後單位</small>
         <strong>${escapeHtml(fmtCount(units))}<small>個</small></strong>
-        <em>真命 ${escapeHtml(fmtCount(countState.zhenMing.done))}/${ZHEN_MING_UNITS}・真正補修 ${escapeHtml(fmtCount(countState.zhenZheng.done))}/${ZHEN_ZHENG_UNITS}</em>
+        <em>${escapeHtml(rawNote)}真命 ${escapeHtml(fmtCount(countState.zhenMing.done))}/${ZHEN_MING_UNITS}・真正補修 ${escapeHtml(fmtCount(countState.zhenZheng.done))}/${ZHEN_ZHENG_UNITS}</em>
       `;
 
       els.leaderUnitCounts.append(card);
